@@ -1,0 +1,4 @@
+# Block Environment Secrets
+.env
+*.env
+back-end/.env
