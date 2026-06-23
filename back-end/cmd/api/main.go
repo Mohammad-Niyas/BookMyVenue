@@ -1,12 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"bookmyvenue/config"
 	"bookmyvenue/internal/domain"
-
-	"github.com/gin-gonic/gin"
+	"bookmyvenue/internal/handler"
+	"bookmyvenue/internal/repository"
+	"bookmyvenue/internal/router"
+	"bookmyvenue/internal/service"
 )
 
 func main() {
@@ -19,10 +22,15 @@ func main() {
 		log.Fatalf("Auto-migration failed: %v", err)
 	}
 
-	r := gin.Default()
+	userRepo := repository.NewUserRepository(db)
+	authService := service.NewAuthService(userRepo, cfg)
+	authHandler := handler.NewAuthHandler(authService)
 
-	log.Println("Starting Gin HTTP server on port 8080...")
-	if err := r.Run(":8080"); err != nil {
+	r := router.SetupRouter(cfg, authHandler)
+
+	port := fmt.Sprintf(":%s", cfg.ServerPort)
+	log.Printf("🚀 BookMyVenue server starting on port %s", cfg.ServerPort)
+	if err := r.Run(port); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
 }

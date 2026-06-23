@@ -10,7 +10,8 @@
 		Name         string    `gorm:"type:varchar(100);not null"`
 		Email        string    `gorm:"type:varchar(255);uniqueIndex;not null"`
 		PasswordHash string    `gorm:"type:varchar(255);not null"`
-		Role         string    `gorm:"type:varchar(20);default:'user';not null"` // Allowed: 'user', 'owner'
+		Status       string    `gorm:"type:varchar(20);default:'active';not null"`
+		Role         string    `gorm:"type:varchar(20);default:'user';not null"`
 		
 		// Owner Specific Fields
 		Phone        *string   `gorm:"type:varchar(15)"`
