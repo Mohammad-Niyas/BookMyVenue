@@ -22,11 +22,17 @@ func main() {
 		log.Fatalf("Auto-migration failed: %v", err)
 	}
 
+	// User & Owner
 	userRepo := repository.NewUserRepository(db)
 	authService := service.NewAuthService(userRepo, cfg)
 	authHandler := handler.NewAuthHandler(authService)
 
-	r := router.SetupRouter(cfg, authHandler)
+	// Admin
+	adminRepo := repository.NewAdminRepository(db)
+	adminAuthService := service.NewAdminAuthService(adminRepo, cfg)
+	adminAuthHandler := handler.NewAdminAuthHandler(adminAuthService)
+
+	r := router.SetupRouter(cfg, authHandler,adminAuthHandler)
 
 	port := fmt.Sprintf(":%s", cfg.ServerPort)
 	log.Printf("🚀 BookMyVenue server starting on port %s", cfg.ServerPort)
