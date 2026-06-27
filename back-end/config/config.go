@@ -20,6 +20,11 @@ type Config struct {
 	JWTSecret             string
 	AccessTokenExpiryMins int
 	RefreshTokenExpiryDays int
+	// Redis
+    RedisHost     string
+    RedisPort     string
+    RedisPassword string
+    RedisDB       int
 	// Server
 	ServerPort string
 }
@@ -36,6 +41,10 @@ func LoadConfig() *Config {
 	dbPassword := os.Getenv("DB_PASSWORD")
 	dbName := os.Getenv("DB_NAME")
 	dbSSLMode := os.Getenv("DB_SSLMODE")
+	redisHost := getEnvOrDefault("REDIS_HOST", "localhost")
+	redisPort := getEnvOrDefault("REDIS_PORT", "6379")
+	redisPassword := os.Getenv("REDIS_PASSWORD")
+	redisDB := getEnvAsInt("REDIS_DB", 0)
 
 	if dbHost == "" {
 		dbHost = "localhost"
@@ -79,6 +88,10 @@ func LoadConfig() *Config {
 		AccessTokenExpiryMins: accessExpiry,
 		RefreshTokenExpiryDays: refreshExpiry,
 		ServerPort: serverPort,
+		RedisHost: redisHost,
+		RedisPort: redisPort,
+		RedisPassword: redisPassword,
+		RedisDB: redisDB,
 	}
 }
 
