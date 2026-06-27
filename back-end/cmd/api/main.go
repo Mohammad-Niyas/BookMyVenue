@@ -16,6 +16,7 @@ func main() {
 	cfg := config.LoadConfig()
 
 	db := config.ConnectDB(cfg)
+	rdb := config.ConnectRedis(cfg)
 
 	err := db.AutoMigrate(&domain.User{}, &domain.Admin{})
 	if err != nil {
@@ -32,7 +33,7 @@ func main() {
 	adminAuthService := service.NewAdminAuthService(adminRepo, cfg)
 	adminAuthHandler := handler.NewAdminAuthHandler(adminAuthService)
 
-	r := router.SetupRouter(cfg, authHandler,adminAuthHandler)
+	r := router.SetupRouter(cfg,rdb, authHandler,adminAuthHandler)
 
 	port := fmt.Sprintf(":%s", cfg.ServerPort)
 	log.Printf("🚀 BookMyVenue server starting on port %s", cfg.ServerPort)
