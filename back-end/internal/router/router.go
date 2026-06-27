@@ -3,25 +3,30 @@ package router
 import (
 	"bookmyvenue/config"
 	"bookmyvenue/internal/handler"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 )
 
-func SetupRouter(cfg *config.Config, authHandler *handler.AuthHandler,adminAuthHandler *handler.AdminAuthHandler) *gin.Engine {
+func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.AuthHandler,adminAuthHandler *handler.AdminAuthHandler) *gin.Engine {
 	r := gin.Default()
+
+	loginLimiter := handler.RateLimiter(rdb, "login", 5, 15*time.Minute)
+	registerLimiter := handler.RateLimiter(rdb, "register", 3, 1*time.Hour)
 
     // Public Auth Routes (User/Owner)
 	auth := r.Group("/api/auth")
 	{
-		auth.POST("/register/user", authHandler.RegisterUser)
-		auth.POST("/register/owner", authHandler.RegisterOwner)
-		auth.POST("/login", authHandler.Login)
+		auth.POST("/register/user", registerLimiter, authHandler.RegisterUser)
+		auth.POST("/register/owner", registerLimiter, authHandler.RegisterOwner)
+		auth.POST("/login", loginLimiter, authHandler.Login)
 	}
 
 	// Public Auth Routes (Admin)
 	adminAuth := r.Group("/api/admin/auth")
 	{
-		adminAuth.POST("/login", adminAuthHandler.Login)
+		adminAuth.POST("/login", loginLimiter, adminAuthHandler.Login)
 	}
 
 	// Protected User/Owner Routes
