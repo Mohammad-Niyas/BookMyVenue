@@ -25,6 +25,11 @@ type Config struct {
     RedisPort     string
     RedisPassword string
     RedisDB       int
+	// AWS S3
+	AWSRegion          string
+	AWSAccessKeyID     string
+	AWSSecretAccessKey string
+	AWSS3Bucket        string
 	// Server
 	ServerPort string
 }
@@ -45,6 +50,10 @@ func LoadConfig() *Config {
 	redisPort := getEnvOrDefault("REDIS_PORT", "6379")
 	redisPassword := os.Getenv("REDIS_PASSWORD")
 	redisDB := getEnvAsInt("REDIS_DB", 0)
+	awsRegion := getEnvOrDefault("AWS_REGION", "ap-south-1")
+	awsAccessKey := os.Getenv("AWS_ACCESS_KEY_ID")
+	awsSecretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	awsBucket := os.Getenv("AWS_S3_BUCKET")
 
 	if dbHost == "" {
 		dbHost = "localhost"
@@ -92,6 +101,10 @@ func LoadConfig() *Config {
 		RedisPort: redisPort,
 		RedisPassword: redisPassword,
 		RedisDB: redisDB,
+		AWSRegion: awsRegion,
+		AWSAccessKeyID: awsAccessKey,
+		AWSSecretAccessKey: awsSecretKey,
+		AWSS3Bucket: awsBucket,
 	}
 }
 
