@@ -30,6 +30,8 @@ type Config struct {
 	AWSAccessKeyID     string
 	AWSSecretAccessKey string
 	AWSS3Bucket        string
+	// RabbitMQ
+	RabbitMQURL        string
 	// Server
 	ServerPort string
 }
@@ -54,6 +56,7 @@ func LoadConfig() *Config {
 	awsAccessKey := os.Getenv("AWS_ACCESS_KEY_ID")
 	awsSecretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
 	awsBucket := os.Getenv("AWS_S3_BUCKET")
+	rabbitURL := getEnvOrDefault("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
 
 	if dbHost == "" {
 		dbHost = "localhost"
@@ -105,6 +108,7 @@ func LoadConfig() *Config {
 		AWSAccessKeyID: awsAccessKey,
 		AWSSecretAccessKey: awsSecretKey,
 		AWSS3Bucket: awsBucket,
+		RabbitMQURL: rabbitURL,
 	}
 }
 
