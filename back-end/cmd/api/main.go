@@ -18,7 +18,7 @@ func main() {
 	db := config.ConnectDB(cfg)
 	rdb := config.ConnectRedis(cfg)
 
-	err := db.AutoMigrate(&domain.User{}, &domain.Admin{})
+	err := db.AutoMigrate(&domain.User{}, &domain.Admin{},&domain.Venue{},&domain.Space{})
 	if err != nil {
 		log.Fatalf("Auto-migration failed: %v", err)
 	}
