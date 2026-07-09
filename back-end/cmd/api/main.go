@@ -10,6 +10,7 @@ import (
 	"bookmyvenue/internal/repository"
 	"bookmyvenue/internal/router"
 	"bookmyvenue/internal/service"
+	"bookmyvenue/pkg/s3"
 )
 
 func main() {
@@ -18,9 +19,27 @@ func main() {
 	db := config.ConnectDB(cfg)
 	rdb := config.ConnectRedis(cfg)
 
-	err := db.AutoMigrate(&domain.User{}, &domain.Admin{},&domain.Venue{},&domain.Space{})
+	err := db.AutoMigrate(&domain.User{},
+		&domain.Admin{},
+		&domain.Venue{},
+		&domain.Space{},
+		&domain.Slot{},
+		&domain.Booking{},
+		&domain.Payment{},
+		&domain.PaymentAuditLog{},
+		&domain.Refund{},
+		&domain.CancellationPolicy{},
+		&domain.VenueEditDraft{},
+		&domain.OutboxEvent{},)
+
 	if err != nil {
 		log.Fatalf("Auto-migration failed: %v", err)
+	}
+
+	// S3 Client
+	s3Client, err := s3.NewS3Client(cfg)
+	if err != nil {
+		log.Printf("⚠️  S3 Client not initialized: %v (presigned URLs won't work)", err)
 	}
 
 	// User & Owner
@@ -33,7 +52,13 @@ func main() {
 	adminAuthService := service.NewAdminAuthService(adminRepo, cfg)
 	adminAuthHandler := handler.NewAdminAuthHandler(adminAuthService)
 
-	r := router.SetupRouter(cfg,rdb, authHandler,adminAuthHandler)
+	// Venue
+	venueRepo := repository.NewVenueRepository(db)
+	spaceRepo := repository.NewSpaceRepository(db)
+	venueService := service.NewVenueService(venueRepo, spaceRepo, s3Client)
+	venueHandler := handler.NewVenueHandler(venueService)
+
+	r := router.SetupRouter(cfg,rdb, authHandler,adminAuthHandler,venueHandler)
 
 	port := fmt.Sprintf(":%s", cfg.ServerPort)
 	log.Printf("🚀 BookMyVenue server starting on port %s", cfg.ServerPort)

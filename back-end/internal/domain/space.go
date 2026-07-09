@@ -2,7 +2,9 @@ package domain
 
 import (
 	"time"
+
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type Space struct {
@@ -20,6 +22,7 @@ type Space struct {
 	
 	CreatedAt   time.Time `gorm:"autoCreateTime"`
 	UpdatedAt   time.Time `gorm:"autoUpdateTime"`
+	DeletedAt gorm.DeletedAt `gorm:"index"`
 	
 	Slots       []Slot    `gorm:"foreignKey:SpaceID;constraint:OnDelete:CASCADE"`
 }

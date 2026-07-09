@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type Venue struct {
@@ -23,6 +24,7 @@ type Venue struct {
 	Images    []string  `gorm:"serializer:json"`
 	CreatedAt time.Time `gorm:"autoCreateTime"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime"`
+	DeletedAt gorm.DeletedAt `gorm:"index"`
 	// Relationships
 	Spaces             []Space             `gorm:"foreignKey:VenueID;constraint:OnDelete:CASCADE"`
 	CancellationPolicy *CancellationPolicy `gorm:"foreignKey:VenueID;constraint:OnDelete:CASCADE"`
