@@ -9,11 +9,13 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.AuthHandler,adminAuthHandler *handler.AdminAuthHandler) *gin.Engine {
+func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.AuthHandler,adminAuthHandler *handler.AdminAuthHandler,venueHandler *handler.VenueHandler) *gin.Engine {
 	r := gin.Default()
 
 	loginLimiter := handler.RateLimiter(rdb, "login", 5, 15*time.Minute)
 	registerLimiter := handler.RateLimiter(rdb, "register", 3, 1*time.Hour)
+	venueSubmitLimiter := handler.RateLimiter(rdb, "venue_submit", 10, 24*time.Hour)
+	venueUpdateLimiter := handler.RateLimiter(rdb, "venue_update", 30, 1*time.Hour)
 
     // Public Auth Routes (User/Owner)
 	auth := r.Group("/api/auth")
@@ -50,9 +52,19 @@ func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.Auth
 	ownerRoutes.Use(handler.AuthMiddleware(cfg))
 	ownerRoutes.Use(handler.RoleMiddleware("owner"))
 	{
-		ownerRoutes.GET("/dashboard", func(c *gin.Context) {
-			c.JSON(200, gin.H{"message": "owner dashboard — only owners can see this"})
-		})
+		// S3 Presigned URL
+		ownerRoutes.GET("/venues/presigned-url", venueHandler.GetPresignedURL)
+		// Venue CRUD
+		ownerRoutes.POST("/venues",venueSubmitLimiter, venueHandler.CreateVenue)
+		ownerRoutes.GET("/venues",venueHandler.GetOwnerVenues)
+		ownerRoutes.GET("/venues/:id", venueHandler.GetVenueByID)
+		ownerRoutes.PUT("/venues/:id",venueUpdateLimiter, venueHandler.UpdateVenue)
+		ownerRoutes.DELETE("/venues/:id", venueHandler.DeleteVenue)
+		ownerRoutes.PATCH("/venues/:id/toggle", venueHandler.ToggleVenueStatus)
+		// Space CRUD (nested under venue)
+		ownerRoutes.POST("/venues/:id/spaces", venueHandler.AddSpace)
+		ownerRoutes.PUT("/spaces/:id", venueHandler.UpdateSpace)
+		ownerRoutes.DELETE("/spaces/:id", venueHandler.DeleteSpace)
 	}
 
 	// Protected Admin Routes
