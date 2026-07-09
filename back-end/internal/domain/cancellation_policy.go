@@ -2,7 +2,9 @@ package domain
 
 import (
 	"time"
+
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type CancellationPolicy struct {
@@ -16,4 +18,5 @@ type CancellationPolicy struct {
 	
 	CreatedAt            time.Time `gorm:"autoCreateTime"`
 	UpdatedAt            time.Time `gorm:"autoUpdateTime"`
+	DeletedAt gorm.DeletedAt `gorm:"index"`
 }
