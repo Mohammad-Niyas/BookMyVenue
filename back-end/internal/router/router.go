@@ -9,13 +9,16 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.AuthHandler,adminAuthHandler *handler.AdminAuthHandler,venueHandler *handler.VenueHandler) *gin.Engine {
+func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.AuthHandler,adminAuthHandler *handler.AdminAuthHandler,venueHandler *handler.VenueHandler,adminVenueHandler *handler.AdminVenueHandler) *gin.Engine {
 	r := gin.Default()
 
+	globalLimiter := handler.RateLimiter(rdb, "global", 100, 1*time.Minute)
 	loginLimiter := handler.RateLimiter(rdb, "login", 5, 15*time.Minute)
 	registerLimiter := handler.RateLimiter(rdb, "register", 3, 1*time.Hour)
 	venueSubmitLimiter := handler.RateLimiter(rdb, "venue_submit", 10, 24*time.Hour)
 	venueUpdateLimiter := handler.RateLimiter(rdb, "venue_update", 30, 1*time.Hour)
+
+	r.Use(globalLimiter)
 
     // Public Auth Routes (User/Owner)
 	auth := r.Group("/api/auth")
@@ -75,6 +78,14 @@ func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.Auth
 		adminRoutes.GET("/dashboard", func(c *gin.Context) {
 			c.JSON(200, gin.H{"message": "admin dashboard — only admins can see this"})
 		})
+
+		adminRoutes.GET("/venues/pending", adminVenueHandler.GetPendingVenues)
+		adminRoutes.POST("/venues/:id/approve", adminVenueHandler.ApproveVenue)
+		adminRoutes.POST("/venues/:id/reject", adminVenueHandler.RejectVenue)
+		
+		adminRoutes.GET("/venues/drafts/pending", adminVenueHandler.GetPendingDrafts)
+		adminRoutes.POST("/venues/drafts/:draft_id/approve", adminVenueHandler.ApproveEditDraft)
+		adminRoutes.POST("/venues/drafts/:draft_id/reject", adminVenueHandler.RejectEditDraft)
 	}
 
 	return r

@@ -46,5 +46,10 @@ func (r *spaceRepository) Update(space *domain.Space) error {
 	return r.db.Save(space).Error
 }
 func (r *spaceRepository) Delete(id uuid.UUID) error {
-	return r.db.Delete(&domain.Space{}, "id = ?", id).Error
+    return r.db.Transaction(func(tx *gorm.DB) error {
+        if err := tx.Where("space_id = ?", id).Delete(&domain.Slot{}).Error; err != nil {
+            return err
+        }
+        return tx.Delete(&domain.Space{}, "id = ?", id).Error
+    })
 }
