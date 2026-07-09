@@ -2,7 +2,9 @@ package domain
 
 import (
 	"time"
+
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type VenueEditDraft struct {
@@ -24,4 +26,5 @@ type VenueEditDraft struct {
 
 	CreatedAt       time.Time `gorm:"autoCreateTime"`
 	UpdatedAt       time.Time `gorm:"autoUpdateTime"`
+	DeletedAt gorm.DeletedAt `gorm:"index"`
 }
