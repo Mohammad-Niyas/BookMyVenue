@@ -26,6 +26,7 @@ type VenueRepository interface {
 	FindPendingVenues() ([]domain.Venue, error)
 	FindEditDraftByID(id uuid.UUID) (*domain.VenueEditDraft, error)
 	FindPendingEditDrafts() ([]domain.VenueEditDraft, error)
+	ApproveDraftAndMerge(venue *domain.Venue, draft *domain.VenueEditDraft) error
 }
 type venueRepository struct {
 	db *gorm.DB
@@ -88,6 +89,15 @@ func (r *venueRepository) Update(venue *domain.Venue) error {
 }
 func (r *venueRepository) Delete(id uuid.UUID) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		var spaceIDs []uuid.UUID
+		if err := tx.Model(&domain.Space{}).Where("venue_id = ?", id).Pluck("id", &spaceIDs).Error; err != nil {
+			return err
+		}
+		if len(spaceIDs) > 0 {
+			if err := tx.Where("space_id IN ?", spaceIDs).Delete(&domain.Slot{}).Error; err != nil {
+				return err
+			}
+		}
 		if err := tx.Where("venue_id = ?", id).Delete(&domain.Space{}).Error; err != nil {
 			return err
 		}
@@ -167,5 +177,17 @@ func (r *venueRepository) FindPendingEditDrafts() ([]domain.VenueEditDraft, erro
 		Order("created_at ASC").
 		Find(&drafts).Error
 	return drafts, err
+}
+
+func (r *venueRepository) ApproveDraftAndMerge(venue *domain.Venue, draft *domain.VenueEditDraft) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(venue).Error; err != nil {
+			return err
+		}
+		if err := tx.Save(draft).Error; err != nil {
+			return err
+		}
+		return nil
+	})
 }
 

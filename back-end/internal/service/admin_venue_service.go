@@ -151,11 +151,8 @@ func (s *adminVenueService) ApproveEditDraft(draftID uuid.UUID) error {
 	venue.Images = draft.Images
 	draft.Status = "approved"
 
-	if err := s.venueRepo.Update(venue); err != nil {
-		return errors.New("failed to merge draft updates to live venue")
-	}
-	if err := s.venueRepo.UpdateEditDraft(draft); err != nil {
-		return errors.New("failed to update draft status")
+	if err := s.venueRepo.ApproveDraftAndMerge(venue, draft); err != nil {
+		return errors.New("failed to merge and approve draft updates")
 	}
 	return nil
 }
