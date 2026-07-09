@@ -34,7 +34,19 @@ func NewVenueRepository(db *gorm.DB) VenueRepository {
 // venue
 
 func (r *venueRepository) Create(venue *domain.Venue) error {
-	return r.db.Create(venue).Error
+    return r.db.Transaction(func(tx *gorm.DB) error {
+        if err := tx.Create(venue).Error; err != nil {
+            return err
+        }
+        policy := &domain.CancellationPolicy{
+            VenueID:              venue.ID,
+            FullRefundDays:       15,
+            FullRefundPercent:    95.00,
+            PartialRefundDays:    7,
+            PartialRefundPercent: 50.00,
+        }
+        return tx.Create(policy).Error
+    })
 }
 
 func (r *venueRepository) FindByID(id uuid.UUID) (*domain.Venue, error) {

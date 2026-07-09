@@ -86,6 +86,7 @@ type VenueService interface {
 	GetOwnerVenues(ownerID uuid.UUID) ([]VenueResponse, error)
 	UpdateVenue(ownerID uuid.UUID, venueID uuid.UUID, req UpdateVenueRequest) (venue *VenueResponse, isDraft bool, err error)
 	DeleteVenue(ownerID uuid.UUID, venueID uuid.UUID) error
+	ToggleVenueStatus(ownerID uuid.UUID, venueID uuid.UUID) (*VenueResponse, error)
 
 	// Space 
 	AddSpace(ownerID uuid.UUID, venueID uuid.UUID, req CreateSpaceRequest) (*SpaceResponse, error)
@@ -307,6 +308,9 @@ func (s *venueService) UpdateVenue(ownerID uuid.UUID, venueID uuid.UUID, req Upd
 	if req.Rules != nil { venue.Rules = *req.Rules }
 	if req.Timings != nil { venue.Timings = *req.Timings }
 	if req.Images != nil { venue.Images = req.Images }
+	if venue.Status == "rejected" {
+		venue.Status = "pending"
+	}
 	if err := s.venueRepo.Update(venue); err != nil {
 		return nil, false, errors.New("failed to update venue")
 	}
@@ -328,6 +332,34 @@ func (s *venueService) DeleteVenue(ownerID uuid.UUID, venueID uuid.UUID) error {
 		return errors.New("failed to delete venue")
 	}
 	return nil
+}
+
+func (s *venueService) ToggleVenueStatus(ownerID uuid.UUID, venueID uuid.UUID) (*VenueResponse, error) {
+	venue, err := s.venueRepo.FindByID(venueID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("venue not found")
+		}
+		return nil, errors.New("failed to fetch venue")
+	}
+
+	if venue.OwnerID != ownerID {
+		return nil, errors.New("unauthorized: you don't own this venue")
+	}
+
+	if venue.Status == "approved" || venue.Status == "active" {
+		venue.Status = "inactive"
+	} else if venue.Status == "inactive" {
+		venue.Status = "active"
+	} else {
+		return nil, errors.New("cannot toggle status: venue is pending or suspended")
+	}
+
+	if err := s.venueRepo.Update(venue); err != nil {
+		return nil, errors.New("failed to toggle venue status")
+	}
+
+	return mapToVenueResponse(venue), nil
 }
 
 // Space
