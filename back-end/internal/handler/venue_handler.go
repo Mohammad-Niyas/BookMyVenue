@@ -181,6 +181,36 @@ func (h *VenueHandler) DeleteVenue(c *gin.Context) {
 	})
 }
 
+func (h *VenueHandler) ToggleVenueStatus(c *gin.Context) {
+	ownerID, err := getOwnerID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user ID"})
+		return
+	}
+	venueID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid venue ID"})
+		return
+	}
+	venue, err := h.venueService.ToggleVenueStatus(ownerID, venueID)
+	if err != nil {
+		if err.Error() == "venue not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		if err.Error() == "unauthorized: you don't own this venue" {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message": "venue status toggled successfully",
+		"data":    venue,
+	})
+}
+
 // Space Endpoints
 
 func (h *VenueHandler) AddSpace(c *gin.Context) {

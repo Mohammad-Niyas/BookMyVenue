@@ -58,6 +58,7 @@ func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.Auth
 		ownerRoutes.GET("/venues/:id", venueHandler.GetVenueByID)
 		ownerRoutes.PUT("/venues/:id", venueHandler.UpdateVenue)
 		ownerRoutes.DELETE("/venues/:id", venueHandler.DeleteVenue)
+		ownerRoutes.PATCH("/venues/:id/toggle", venueHandler.ToggleVenueStatus)
 		// Space CRUD (nested under venue)
 		ownerRoutes.POST("/venues/:id/spaces", venueHandler.AddSpace)
 		ownerRoutes.PUT("/spaces/:id", venueHandler.UpdateSpace)
