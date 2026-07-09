@@ -260,45 +260,49 @@ func (s *venueService) UpdateVenue(ownerID uuid.UUID, venueID uuid.UUID, req Upd
 		}
 	}
 	if venue.Status == "approved" {
-		existingDraft, err := s.venueRepo.FindPendingDraftByVenueID(venueID)
-		if err == nil && existingDraft != nil {
-			if req.Name != nil { existingDraft.Name = *req.Name }
-			if req.Description != nil { existingDraft.Description = *req.Description }
-			if req.Type != nil { existingDraft.Type = *req.Type }
-			if req.Address != nil { existingDraft.Address = *req.Address }
-			if req.City != nil { existingDraft.City = *req.City }
-			if req.Rules != nil { existingDraft.Rules = *req.Rules }
-			if req.Timings != nil { existingDraft.Timings = *req.Timings }
-			if req.Images != nil { existingDraft.Images = req.Images }
-			if err := s.venueRepo.UpdateEditDraft(existingDraft); err != nil {
-				return nil, false, errors.New("failed to update pending edit request")
+		hasMajorChanges := req.Name != nil || req.Address != nil || req.City != nil || req.Type != nil || req.Images != nil
+		if hasMajorChanges {
+			existingDraft, err := s.venueRepo.FindPendingDraftByVenueID(venueID)
+			if err == nil && existingDraft != nil {
+				if req.Name != nil { existingDraft.Name = *req.Name }
+				if req.Description != nil { existingDraft.Description = *req.Description }
+				if req.Type != nil { existingDraft.Type = *req.Type }
+				if req.Address != nil { existingDraft.Address = *req.Address }
+				if req.City != nil { existingDraft.City = *req.City }
+				if req.Rules != nil { existingDraft.Rules = *req.Rules }
+				if req.Timings != nil { existingDraft.Timings = *req.Timings }
+				if req.Images != nil { existingDraft.Images = req.Images }
+				
+				if err := s.venueRepo.UpdateEditDraft(existingDraft); err != nil {
+					return nil, false, errors.New("failed to update pending edit request")
+				}
+				return mapToVenueResponse(venue), true, nil
+			}
+			draft := &domain.VenueEditDraft{
+				VenueID:     venueID,
+				Name:        venue.Name,
+				Description: venue.Description,
+				Type:        venue.Type,
+				Address:     venue.Address,
+				City:        venue.City,
+				Rules:       venue.Rules,
+				Timings:     venue.Timings,
+				Images:      venue.Images,
+				Status:      "pending_review",
+			}
+			if req.Name != nil { draft.Name = *req.Name }
+			if req.Description != nil { draft.Description = *req.Description }
+			if req.Type != nil { draft.Type = *req.Type }
+			if req.Address != nil { draft.Address = *req.Address }
+			if req.City != nil { draft.City = *req.City }
+			if req.Rules != nil { draft.Rules = *req.Rules }
+			if req.Timings != nil { draft.Timings = *req.Timings }
+			if req.Images != nil { draft.Images = req.Images }
+			if err := s.venueRepo.CreateEditDraft(draft); err != nil {
+				return nil, false, errors.New("failed to submit edit request")
 			}
 			return mapToVenueResponse(venue), true, nil
 		}
-		draft := &domain.VenueEditDraft{
-			VenueID:     venueID,
-			Name:        venue.Name,
-			Description: venue.Description,
-			Type:        venue.Type,
-			Address:     venue.Address,
-			City:        venue.City,
-			Rules:       venue.Rules,
-			Timings:     venue.Timings,
-			Images:      venue.Images,
-			Status:      "pending_review",
-		}
-		if req.Name != nil { draft.Name = *req.Name }
-		if req.Description != nil { draft.Description = *req.Description }
-		if req.Type != nil { draft.Type = *req.Type }
-		if req.Address != nil { draft.Address = *req.Address }
-		if req.City != nil { draft.City = *req.City }
-		if req.Rules != nil { draft.Rules = *req.Rules }
-		if req.Timings != nil { draft.Timings = *req.Timings }
-		if req.Images != nil { draft.Images = req.Images }
-		if err := s.venueRepo.CreateEditDraft(draft); err != nil {
-			return nil, false, errors.New("failed to submit edit request")
-		}
-		return mapToVenueResponse(venue), true, nil
 	}
 	if req.Name != nil { venue.Name = *req.Name }
 	if req.Description != nil { venue.Description = *req.Description }
