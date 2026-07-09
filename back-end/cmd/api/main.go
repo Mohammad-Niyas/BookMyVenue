@@ -58,7 +58,10 @@ func main() {
 	venueService := service.NewVenueService(venueRepo, spaceRepo, s3Client)
 	venueHandler := handler.NewVenueHandler(venueService)
 
-	r := router.SetupRouter(cfg,rdb, authHandler,adminAuthHandler,venueHandler)
+	adminVenueService := service.NewAdminVenueService(venueRepo)
+	adminVenueHandler := handler.NewAdminVenueHandler(adminVenueService)
+
+	r := router.SetupRouter(cfg,rdb, authHandler,adminAuthHandler,venueHandler,adminVenueHandler)
 
 	port := fmt.Sprintf(":%s", cfg.ServerPort)
 	log.Printf("🚀 BookMyVenue server starting on port %s", cfg.ServerPort)

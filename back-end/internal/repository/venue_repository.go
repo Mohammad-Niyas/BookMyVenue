@@ -22,6 +22,10 @@ type VenueRepository interface {
 	CreateEditDraft(draft *domain.VenueEditDraft) error
 	FindPendingDraftByVenueID(venueID uuid.UUID) (*domain.VenueEditDraft, error)
 	UpdateEditDraft(draft *domain.VenueEditDraft) error
+
+	FindPendingVenues() ([]domain.Venue, error)
+	FindEditDraftByID(id uuid.UUID) (*domain.VenueEditDraft, error)
+	FindPendingEditDrafts() ([]domain.VenueEditDraft, error)
 }
 type venueRepository struct {
 	db *gorm.DB
@@ -137,5 +141,31 @@ func (r *venueRepository) FindPendingDraftByVenueID(venueID uuid.UUID) (*domain.
 
 func (r *venueRepository) UpdateEditDraft(draft *domain.VenueEditDraft) error {
 	return r.db.Save(draft).Error
+}
+
+func (r *venueRepository) FindPendingVenues() ([]domain.Venue, error) {
+	var venues []domain.Venue
+	err := r.db.Preload("Spaces").Preload("CancellationPolicy").
+		Where("status = ?", "pending").
+		Order("created_at ASC").
+		Find(&venues).Error
+	return venues, err
+}
+
+func (r *venueRepository) FindEditDraftByID(id uuid.UUID) (*domain.VenueEditDraft, error) {
+	var draft domain.VenueEditDraft
+	err := r.db.First(&draft, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &draft, nil
+}
+
+func (r *venueRepository) FindPendingEditDrafts() ([]domain.VenueEditDraft, error) {
+	var drafts []domain.VenueEditDraft
+	err := r.db.Where("status = ?", "pending_review").
+		Order("created_at ASC").
+		Find(&drafts).Error
+	return drafts, err
 }
 
