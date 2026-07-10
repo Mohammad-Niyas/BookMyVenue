@@ -27,6 +27,8 @@ type VenueRepository interface {
 	FindEditDraftByID(id uuid.UUID) (*domain.VenueEditDraft, error)
 	FindPendingEditDrafts() ([]domain.VenueEditDraft, error)
 	ApproveDraftAndMerge(venue *domain.Venue, draft *domain.VenueEditDraft) error
+
+	Search(city string, venueType string, query string, minPrice, maxPrice float64, minCapacity int, limit, offset int) ([]domain.Venue, int64, error)
 }
 type venueRepository struct {
 	db *gorm.DB
@@ -189,5 +191,43 @@ func (r *venueRepository) ApproveDraftAndMerge(venue *domain.Venue, draft *domai
 		}
 		return nil
 	})
+}
+
+func (r *venueRepository) Search(city string, venueType string, query string, minPrice, maxPrice float64, minCapacity int, limit, offset int) ([]domain.Venue, int64, error) {
+	var venues []domain.Venue
+	var count int64
+
+	db := r.db.Model(&domain.Venue{}).Preload("Spaces").Preload("CancellationPolicy").Where("status = ?", "approved")
+
+	if city != "" {
+		db = db.Where("city ILIKE ?", "%"+city+"%")
+	}
+	if venueType != "" {
+		db = db.Where("type = ?", venueType)
+	}
+	if query != "" {
+		db = db.Where("name ILIKE ? OR description ILIKE ? OR address ILIKE ?", "%"+query+"%", "%"+query+"%", "%"+query+"%")
+	}
+
+	if minPrice > 0 || maxPrice > 0 || minCapacity > 0 {
+		subQuery := r.db.Model(&domain.Space{}).Select("venue_id")
+		if minPrice > 0 {
+			subQuery = subQuery.Where("price >= ?", minPrice)
+		}
+		if maxPrice > 0 {
+			subQuery = subQuery.Where("price <= ?", maxPrice)
+		}
+		if minCapacity > 0 {
+			subQuery = subQuery.Where("capacity >= ?", minCapacity)
+		}
+		db = db.Where("id IN (?)", subQuery)
+	}
+
+	if err := db.Count(&count).Error; err != nil {
+		return nil, 0, err
+	}
+
+	err := db.Limit(limit).Offset(offset).Order("created_at DESC").Find(&venues).Error
+	return venues, count, err
 }
 

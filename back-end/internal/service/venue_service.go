@@ -5,9 +5,13 @@ import (
 	"bookmyvenue/internal/repository"
 	"bookmyvenue/pkg/s3"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -80,6 +84,9 @@ type PresignedURLResponse struct {
 }
 
 type VenueService interface {
+	// Public
+	SearchVenues(city string, venueType string, query string, minPrice, maxPrice float64, minCapacity int, limit, offset int) ([]VenueResponse, int64, error)
+	GetPublicVenueByID(venueID uuid.UUID) (*VenueResponse, error)
 	// Venue
 	CreateVenue(ownerID uuid.UUID, req CreateVenueRequest) (*VenueResponse, error)
 	GetVenueByID(ownerID uuid.UUID, venueID uuid.UUID) (*VenueResponse, error)
@@ -102,13 +109,15 @@ type venueService struct {
 	venueRepo repository.VenueRepository
 	spaceRepo repository.SpaceRepository
 	s3Client  s3.S3Client
+	rdb       *redis.Client
 }
 
-func NewVenueService(venueRepo repository.VenueRepository, spaceRepo repository.SpaceRepository, s3Client s3.S3Client) VenueService {
+func NewVenueService(venueRepo repository.VenueRepository, spaceRepo repository.SpaceRepository, s3Client s3.S3Client,  rdb *redis.Client) VenueService {
 	return &venueService{
 		venueRepo: venueRepo,
 		spaceRepo: spaceRepo,
 		s3Client:  s3Client,
+		rdb:rdb,
 	}
 }
 
@@ -209,6 +218,7 @@ func (s *venueService) CreateVenue(ownerID uuid.UUID, req CreateVenueRequest) (*
 	if err := s.venueRepo.Create(venue); err != nil {
 		return nil, errors.New("failed to create venue")
 	}
+	s.clearSearchCache()
 	return mapToVenueResponse(venue), nil
 }
 
@@ -276,6 +286,7 @@ func (s *venueService) UpdateVenue(ownerID uuid.UUID, venueID uuid.UUID, req Upd
 				if err := s.venueRepo.UpdateEditDraft(existingDraft); err != nil {
 					return nil, false, errors.New("failed to update pending edit request")
 				}
+				s.clearSearchCache()
 				return mapToVenueResponse(venue), true, nil
 			}
 			draft := &domain.VenueEditDraft{
@@ -301,6 +312,7 @@ func (s *venueService) UpdateVenue(ownerID uuid.UUID, venueID uuid.UUID, req Upd
 			if err := s.venueRepo.CreateEditDraft(draft); err != nil {
 				return nil, false, errors.New("failed to submit edit request")
 			}
+			s.clearSearchCache()
 			return mapToVenueResponse(venue), true, nil
 		}
 	}
@@ -318,6 +330,7 @@ func (s *venueService) UpdateVenue(ownerID uuid.UUID, venueID uuid.UUID, req Upd
 	if err := s.venueRepo.Update(venue); err != nil {
 		return nil, false, errors.New("failed to update venue")
 	}
+	s.clearSearchCache()
 	return mapToVenueResponse(venue), false, nil
 }
 
@@ -335,6 +348,7 @@ func (s *venueService) DeleteVenue(ownerID uuid.UUID, venueID uuid.UUID) error {
 	if err := s.venueRepo.Delete(venueID); err != nil {
 		return errors.New("failed to delete venue")
 	}
+	s.clearSearchCache()
 	return nil
 }
 
@@ -362,7 +376,7 @@ func (s *venueService) ToggleVenueStatus(ownerID uuid.UUID, venueID uuid.UUID) (
 	if err := s.venueRepo.Update(venue); err != nil {
 		return nil, errors.New("failed to toggle venue status")
 	}
-
+	s.clearSearchCache()
 	return mapToVenueResponse(venue), nil
 }
 
@@ -406,6 +420,7 @@ func (s *venueService) AddSpace(ownerID uuid.UUID, venueID uuid.UUID, req Create
 	}
 
 	response := mapToSpaceResponse(*space)
+	s.clearSearchCache()
 	return &response, nil
 }
 
@@ -452,6 +467,7 @@ func (s *venueService) UpdateSpace(ownerID uuid.UUID, spaceID uuid.UUID, req Cre
 	}
 
 	response := mapToSpaceResponse(*space)
+	s.clearSearchCache()
 	return &response, nil
 }
 
@@ -480,7 +496,7 @@ func (s *venueService) DeleteSpace(ownerID uuid.UUID, spaceID uuid.UUID) error {
 	if err := s.spaceRepo.Delete(spaceID); err != nil {
 		return errors.New("failed to delete space")
 	}
-
+	s.clearSearchCache()
 	return nil
 }
 
@@ -495,6 +511,74 @@ func (s *venueService) GeneratePresignedURL(ctx context.Context, fileName string
 		UploadURL:   uploadURL,
 		DownloadURL: downloadURL,
 	}, nil
+}
+
+func (s *venueService) clearSearchCache() {
+	ctx := context.Background()
+	var cursor uint64
+	for {
+		keys, nextCursor, err := s.rdb.Scan(ctx, cursor, "search:*", 100).Result()
+		if err == nil && len(keys) > 0 {
+			s.rdb.Del(ctx, keys...)
+		}
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+}
+
+func (s *venueService) SearchVenues(city string, venueType string, query string, minPrice, maxPrice float64, minCapacity int, limit, offset int) ([]VenueResponse, int64, error) {
+	ctx := context.Background()
+	
+	cacheKey := fmt.Sprintf("search:city:%s:type:%s:query:%s:min_price:%f:max_price:%f:min_capacity:%d:limit:%d:offset:%d",
+		city, venueType, query, minPrice, maxPrice, minCapacity, limit, offset)
+
+	val, err := s.rdb.Get(ctx, cacheKey).Result()
+	if err == nil {
+		var cachedResult struct {
+			Venues []VenueResponse `json:"venues"`
+			Count  int64           `json:"count"`
+		}
+		if err := json.Unmarshal([]byte(val), &cachedResult); err == nil {
+			return cachedResult.Venues, cachedResult.Count, nil
+		}
+	}
+
+	venues, count, err := s.venueRepo.Search(city, venueType, query, minPrice, maxPrice, minCapacity, limit, offset)
+	if err != nil {
+		return nil, 0, errors.New("failed to search venues")
+	}
+
+	responseDTOs := mapToVenueResponses(venues)
+
+	cachedData := struct {
+		Venues []VenueResponse `json:"venues"`
+		Count  int64           `json:"count"`
+	}{
+		Venues: responseDTOs,
+		Count:  count,
+	}
+	if data, err := json.Marshal(cachedData); err == nil {
+		s.rdb.Set(ctx, cacheKey, data, 5*time.Minute)
+	}
+
+	return responseDTOs, count, nil
+}
+
+func (s *venueService) GetPublicVenueByID(venueID uuid.UUID) (*VenueResponse, error) {
+	venue, err := s.venueRepo.FindByID(venueID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("venue not found")
+		}
+		return nil, errors.New("failed to fetch venue details")
+	}
+	
+	if venue.Status != "approved" && venue.Status != "active" {
+		return nil, errors.New("venue is not available")
+	}
+	return mapToVenueResponse(venue), nil
 }
 
 
