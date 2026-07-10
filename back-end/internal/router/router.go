@@ -20,6 +20,13 @@ func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.Auth
 
 	r.Use(globalLimiter)
 
+	// Public
+	publicVenues := r.Group("/api/venues")
+	{
+		publicVenues.GET("", venueHandler.SearchVenues)
+		publicVenues.GET("/:id", venueHandler.GetPublicVenueByID)
+	}
+
     // Public Auth Routes (User/Owner)
 	auth := r.Group("/api/auth")
 	{
