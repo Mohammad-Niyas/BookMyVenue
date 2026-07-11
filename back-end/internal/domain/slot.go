@@ -15,7 +15,8 @@ type Slot struct {
 	BookingID *uuid.UUID `gorm:"type:uuid;constraint:OnDelete:SET NULL"` 
 	
 	StartTime *string    `gorm:"type:varchar(5)"` 
-	EndTime   *string    `gorm:"type:varchar(5)"` 
+	EndTime   *string    `gorm:"type:varchar(5)"`
+	Price     *float64   `gorm:"type:decimal(10,2)"`
 
 	CreatedAt time.Time  `gorm:"autoCreateTime"`
 	UpdatedAt time.Time  `gorm:"autoUpdateTime"`
