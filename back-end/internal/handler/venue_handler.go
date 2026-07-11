@@ -3,6 +3,7 @@ package handler
 import (
 	"bookmyvenue/internal/service"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -333,6 +334,78 @@ func (h *VenueHandler) GetPresignedURL(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "presigned URL generated successfully",
 		"data":    result,
+	})
+}
+
+// Venue Search
+
+func (h *VenueHandler) SearchVenues(c *gin.Context) {
+	limitVal := c.DefaultQuery("limit", "10")
+	offsetVal := c.DefaultQuery("offset", "0")
+
+	city := c.Query("city")
+	venueType := c.Query("type")
+	query := c.Query("query")
+
+	var minPrice, maxPrice float64
+	var minCapacity int
+	
+	if val := c.Query("min_price"); val != "" {
+		fmt.Sscanf(val, "%f", &minPrice)
+	}
+	if val := c.Query("max_price"); val != "" {
+		fmt.Sscanf(val, "%f", &maxPrice)
+	}
+	if val := c.Query("min_capacity"); val != "" {
+		fmt.Sscanf(val, "%d", &minCapacity)
+	}
+
+	var limit, offset int
+	fmt.Sscanf(limitVal, "%d", &limit)
+	fmt.Sscanf(offsetVal, "%d", &offset)
+
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	venues, count, err := h.venueService.SearchVenues(city, venueType, query, minPrice, maxPrice, minCapacity, limit, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "venues searched successfully",
+		"total":   count,
+		"limit":   limit,
+		"offset":  offset,
+		"data":    venues,
+	})
+}
+
+func (h *VenueHandler) GetPublicVenueByID(c *gin.Context) {
+	venueID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid venue ID"})
+		return
+	}
+
+	venue, err := h.venueService.GetPublicVenueByID(venueID)
+	if err != nil {
+		if err.Error() == "venue not found" || err.Error() == "venue is not available" {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "venue fetched successfully",
+		"data":    venue,
 	})
 }
 

@@ -55,7 +55,7 @@ func main() {
 	// Venue
 	venueRepo := repository.NewVenueRepository(db)
 	spaceRepo := repository.NewSpaceRepository(db)
-	venueService := service.NewVenueService(venueRepo, spaceRepo, s3Client)
+	venueService := service.NewVenueService(venueRepo, spaceRepo, s3Client,rdb)
 	venueHandler := handler.NewVenueHandler(venueService)
 
 	adminVenueService := service.NewAdminVenueService(venueRepo)
