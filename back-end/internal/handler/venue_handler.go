@@ -409,4 +409,56 @@ func (h *VenueHandler) GetPublicVenueByID(c *gin.Context) {
 	})
 }
 
+func (h *VenueHandler) GenerateSlots(c *gin.Context) {
+	ownerID, err := getOwnerID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user ID"})
+		return
+	}
+	spaceID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid space ID"})
+		return
+	}
+	var req service.GenerateSlotsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	slots, err := h.venueService.GenerateSlots(ownerID, spaceID, req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "slots generated successfully",
+		"count":   len(slots),
+		"data":    slots,
+	})
+}
+
+func (h *VenueHandler) GetAvailableSlots(c *gin.Context) {
+	spaceID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid space ID"})
+		return
+	}
+	dateStr := c.Query("date")
+	if dateStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "date query parameter is required (YYYY-MM-DD)"})
+		return
+	}
+	slots, err := h.venueService.GetAvailableSlots(spaceID, dateStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message": "available slots fetched successfully",
+		"count":   len(slots),
+		"data":    slots,
+	})
+}
+
+
 

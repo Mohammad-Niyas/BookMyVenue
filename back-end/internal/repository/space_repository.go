@@ -2,6 +2,7 @@ package repository
 
 import (
 	"bookmyvenue/internal/domain"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -13,6 +14,11 @@ type SpaceRepository interface {
 	FindByVenueID(venueID uuid.UUID) ([]domain.Space, error)
 	Update(space *domain.Space) error
 	Delete(id uuid.UUID) error
+
+	CreateSlots(slots []domain.Slot) error
+	FindSlotsBySpaceIDAndDate(spaceID uuid.UUID, date time.Time) ([]domain.Slot, error)
+	DeleteUnbookedSlotsByDate(spaceID uuid.UUID, date time.Time) error
+	ReplaceSlots(spaceID uuid.UUID, date time.Time, slotsToCreate []domain.Slot) error
 }
 type spaceRepository struct {
 	db *gorm.DB
@@ -52,4 +58,33 @@ func (r *spaceRepository) Delete(id uuid.UUID) error {
         }
         return tx.Delete(&domain.Space{}, "id = ?", id).Error
     })
+}
+
+func (r *spaceRepository) CreateSlots(slots []domain.Slot) error {
+	return r.db.Create(&slots).Error
+}
+func (r *spaceRepository) FindSlotsBySpaceIDAndDate(spaceID uuid.UUID, date time.Time) ([]domain.Slot, error) {
+	var slots []domain.Slot
+	err := r.db.Where("space_id = ? AND date = ?", spaceID, date).
+		Order("start_time ASC").
+		Find(&slots).Error
+	return slots, err
+}
+func (r *spaceRepository) DeleteUnbookedSlotsByDate(spaceID uuid.UUID, date time.Time) error {
+	return r.db.Where("space_id = ? AND date = ? AND is_booked = ?", spaceID, date, false).
+		Delete(&domain.Slot{}).Error
+}
+func (r *spaceRepository) ReplaceSlots(spaceID uuid.UUID, date time.Time, slotsToCreate []domain.Slot) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("space_id = ? AND date = ? AND is_booked = ?", spaceID, date, false).
+			Delete(&domain.Slot{}).Error; err != nil {
+			return err
+		}
+		if len(slotsToCreate) > 0 {
+			if err := tx.Create(&slotsToCreate).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
