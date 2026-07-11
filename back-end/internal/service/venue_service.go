@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -83,6 +84,28 @@ type PresignedURLResponse struct {
 	DownloadURL string `json:"download_url"`
 }
 
+type CreateSlotPayload struct {
+	StartTime string   `json:"start_time" binding:"required"`
+	EndTime   string   `json:"end_time" binding:"required"`
+	Price     *float64 `json:"price"`
+}
+
+type GenerateSlotsRequest struct {
+	Date  string              `json:"date" binding:"required"`
+	Slots []CreateSlotPayload `json:"slots" binding:"required,dive"`
+}
+
+type SlotResponse struct {
+	ID        uuid.UUID  `json:"id"`
+	SpaceID   uuid.UUID  `json:"space_id"`
+	Date      string     `json:"date"`
+	StartTime *string    `json:"start_time"`
+	EndTime   *string    `json:"end_time"`
+	Price     float64    `json:"price"`
+	IsBooked  bool       `json:"is_booked"`
+	BookingID *uuid.UUID `json:"booking_id"`
+}
+
 type VenueService interface {
 	// Public
 	SearchVenues(city string, venueType string, query string, minPrice, maxPrice float64, minCapacity int, limit, offset int) ([]VenueResponse, int64, error)
@@ -98,8 +121,11 @@ type VenueService interface {
 	// Space 
 	AddSpace(ownerID uuid.UUID, venueID uuid.UUID, req CreateSpaceRequest) (*SpaceResponse, error)
 	UpdateSpace(ownerID uuid.UUID, spaceID uuid.UUID, req CreateSpaceRequest) (*SpaceResponse, error)
-	
 	DeleteSpace(ownerID uuid.UUID, spaceID uuid.UUID) error
+
+	// Slot
+	GenerateSlots(ownerID uuid.UUID, spaceID uuid.UUID, req GenerateSlotsRequest) ([]SlotResponse, error)
+	GetAvailableSlots(spaceID uuid.UUID, dateStr string) ([]SlotResponse, error)
 
 	// S3 
 	GeneratePresignedURL(ctx context.Context, fileName string, contentType string) (*PresignedURLResponse, error)
@@ -581,6 +607,125 @@ func (s *venueService) GetPublicVenueByID(venueID uuid.UUID) (*VenueResponse, er
 	return mapToVenueResponse(venue), nil
 }
 
+func (s *venueService) mapToSlotResponse(slot domain.Slot, spacePrice float64) SlotResponse {
+	dateStr := slot.Date.Format("2006-01-02")
+	
+	actualPrice := spacePrice
+	if slot.Price != nil {
+		actualPrice = *slot.Price
+	}
+	return SlotResponse{
+		ID:        slot.ID,
+		SpaceID:   slot.SpaceID,
+		Date:      dateStr,
+		StartTime: slot.StartTime,
+		EndTime:   slot.EndTime,
+		Price:     actualPrice,
+		IsBooked:  slot.IsBooked,
+		BookingID: slot.BookingID,
+	}
+}
+func (s *venueService) mapToSlotResponses(slots []domain.Slot, spacePrice float64) []SlotResponse {
+	responses := make([]SlotResponse, len(slots))
+	for i, sl := range slots {
+		responses[i] = s.mapToSlotResponse(sl, spacePrice)
+	}
+	return responses
+}
+func isOverlapping(s1, e1, s2, e2 string) bool {
+	return s1 < e2 && s2 < e1
+}
+
+var timeFormatRegex = regexp.MustCompile(`^([0-1][0-9]|2[0-3]):[0-5][0-9]$`)
+
+
+func (s *venueService) GenerateSlots(ownerID uuid.UUID, spaceID uuid.UUID, req GenerateSlotsRequest) ([]SlotResponse, error) {
+	space, err := s.spaceRepo.FindByID(spaceID)
+	if err != nil {
+		return nil, errors.New("space not found")
+	}
+	venue, err := s.venueRepo.FindByID(space.VenueID)
+	if err != nil || venue.OwnerID != ownerID {
+		return nil, errors.New("unauthorized: you do not own this space")
+	}
+	parsedDate, err := time.Parse("2006-01-02", req.Date)
+	if err != nil {
+		return nil, errors.New("invalid date format: use YYYY-MM-DD")
+	}
+	if space.BookingType == "daily" {
+		if len(req.Slots) != 1 {
+			return nil, errors.New("daily booking spaces can only have exactly one slot per date")
+		}
+	}
+	for _, sl := range req.Slots {
+		if !timeFormatRegex.MatchString(sl.StartTime) || !timeFormatRegex.MatchString(sl.EndTime) {
+			return nil, fmt.Errorf("invalid time format for %s-%s: must be strict HH:MM (e.g. 09:00)", sl.StartTime, sl.EndTime)
+		}
+		if sl.StartTime >= sl.EndTime {
+			return nil, fmt.Errorf("slot start time %s must be earlier than end time %s", sl.StartTime, sl.EndTime)
+		}
+	}
+	sort.Slice(req.Slots, func(i, j int) bool {
+		return req.Slots[i].StartTime < req.Slots[j].StartTime
+	})
+	for i := 0; i < len(req.Slots)-1; i++ {
+		current := req.Slots[i]
+		next := req.Slots[i+1]
+		if isOverlapping(current.StartTime, current.EndTime, next.StartTime, next.EndTime) {
+			return nil, fmt.Errorf("slots %s-%s and %s-%s overlap with each other", current.StartTime, current.EndTime, next.StartTime, next.EndTime)
+		}
+	}
+	existingSlots, _ := s.spaceRepo.FindSlotsBySpaceIDAndDate(spaceID, parsedDate)
+	for _, inputSlot := range req.Slots {
+		for _, dbSlot := range existingSlots {
+			if dbSlot.StartTime != nil && dbSlot.EndTime != nil {
+				if isOverlapping(inputSlot.StartTime, inputSlot.EndTime, *dbSlot.StartTime, *dbSlot.EndTime) {
+					if dbSlot.IsBooked {
+						return nil, fmt.Errorf("cannot override slots: slot %s-%s is already booked", *dbSlot.StartTime, *dbSlot.EndTime)
+					}
+				}
+			}
+		}
+	}
+	var slotsToCreate []domain.Slot
+	for _, sl := range req.Slots {
+		sTime := sl.StartTime
+		eTime := sl.EndTime
+		slotsToCreate = append(slotsToCreate, domain.Slot{
+			SpaceID:   spaceID,
+			Date:      parsedDate,
+			IsBooked:  false,
+			StartTime: &sTime,
+			EndTime:   &eTime,
+			Price:     sl.Price,
+		})
+	}
+	if err := s.spaceRepo.ReplaceSlots(spaceID, parsedDate, slotsToCreate); err != nil {
+		return nil, errors.New("failed to replace slots in database transaction")
+	}
+	updatedSlots, err := s.spaceRepo.FindSlotsBySpaceIDAndDate(spaceID, parsedDate)
+	if err != nil {
+		return nil, errors.New("failed to fetch updated slots")
+	}
+	s.clearSearchCache()
+	return s.mapToSlotResponses(updatedSlots, space.Price), nil
+}
+
+func (s *venueService) GetAvailableSlots(spaceID uuid.UUID, dateStr string) ([]SlotResponse, error) {
+	space, err := s.spaceRepo.FindByID(spaceID)
+	if err != nil {
+		return nil, errors.New("space not found")
+	}
+	parsedDate, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return nil, errors.New("invalid date format: use YYYY-MM-DD")
+	}
+	slots, err := s.spaceRepo.FindSlotsBySpaceIDAndDate(spaceID, parsedDate)
+	if err != nil {
+		return nil, errors.New("failed to fetch slots")
+	}
+	return s.mapToSlotResponses(slots, space.Price), nil
+}
 
 
 
