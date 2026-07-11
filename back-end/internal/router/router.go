@@ -25,6 +25,7 @@ func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.Auth
 	{
 		publicVenues.GET("", venueHandler.SearchVenues)
 		publicVenues.GET("/:id", venueHandler.GetPublicVenueByID)
+		publicVenues.GET("/spaces/:id/slots", venueHandler.GetAvailableSlots)
 	}
 
     // Public Auth Routes (User/Owner)
@@ -71,10 +72,12 @@ func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.Auth
 		ownerRoutes.PUT("/venues/:id",venueUpdateLimiter, venueHandler.UpdateVenue)
 		ownerRoutes.DELETE("/venues/:id", venueHandler.DeleteVenue)
 		ownerRoutes.PATCH("/venues/:id/toggle", venueHandler.ToggleVenueStatus)
-		// Space CRUD (nested under venue)
+		// Space CRUD 
 		ownerRoutes.POST("/venues/:id/spaces", venueHandler.AddSpace)
 		ownerRoutes.PUT("/spaces/:id", venueHandler.UpdateSpace)
 		ownerRoutes.DELETE("/spaces/:id", venueHandler.DeleteSpace)
+		// Slot Generation
+		ownerRoutes.POST("/spaces/:id/slots", venueHandler.GenerateSlots)
 	}
 
 	// Protected Admin Routes
@@ -94,6 +97,5 @@ func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.Auth
 		adminRoutes.POST("/venues/drafts/:draft_id/approve", adminVenueHandler.ApproveEditDraft)
 		adminRoutes.POST("/venues/drafts/:draft_id/reject", adminVenueHandler.RejectEditDraft)
 	}
-
 	return r
 }
