@@ -108,7 +108,7 @@ type SlotResponse struct {
 
 type VenueService interface {
 	// Public
-	SearchVenues(city string, venueType string, query string, minPrice, maxPrice float64, minCapacity int, limit, offset int) ([]VenueResponse, int64, error)
+	SearchVenues(city string, venueType string, query string, minPrice, maxPrice float64, minCapacity int, bookingType string, limit, offset int) ([]VenueResponse, int64, error)
 	GetPublicVenueByID(venueID uuid.UUID) (*VenueResponse, error)
 	// Venue
 	CreateVenue(ownerID uuid.UUID, req CreateVenueRequest) (*VenueResponse, error)
@@ -554,11 +554,11 @@ func (s *venueService) clearSearchCache() {
 	}
 }
 
-func (s *venueService) SearchVenues(city string, venueType string, query string, minPrice, maxPrice float64, minCapacity int, limit, offset int) ([]VenueResponse, int64, error) {
+func (s *venueService) SearchVenues(city string, venueType string, query string, minPrice, maxPrice float64, minCapacity int, bookingType string, limit, offset int) ([]VenueResponse, int64, error)  {
 	ctx := context.Background()
 	
-	cacheKey := fmt.Sprintf("search:city:%s:type:%s:query:%s:min_price:%f:max_price:%f:min_capacity:%d:limit:%d:offset:%d",
-		city, venueType, query, minPrice, maxPrice, minCapacity, limit, offset)
+	cacheKey := fmt.Sprintf("search:city:%s:type:%s:query:%s:min_price:%f:max_price:%f:min_capacity:%d:booking_type:%s:limit:%d:offset:%d",
+		city, venueType, query, minPrice, maxPrice, minCapacity, bookingType, limit, offset)
 
 	val, err := s.rdb.Get(ctx, cacheKey).Result()
 	if err == nil {
@@ -571,7 +571,7 @@ func (s *venueService) SearchVenues(city string, venueType string, query string,
 		}
 	}
 
-	venues, count, err := s.venueRepo.Search(city, venueType, query, minPrice, maxPrice, minCapacity, limit, offset)
+	venues, count, err := s.venueRepo.Search(city, venueType, query, minPrice, maxPrice, minCapacity, bookingType, limit, offset)
 	if err != nil {
 		return nil, 0, errors.New("failed to search venues")
 	}

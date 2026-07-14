@@ -346,6 +346,7 @@ func (h *VenueHandler) SearchVenues(c *gin.Context) {
 	city := c.Query("city")
 	venueType := c.Query("type")
 	query := c.Query("query")
+	bookingType := c.Query("booking_type")
 
 	var minPrice, maxPrice float64
 	var minCapacity int
@@ -371,7 +372,7 @@ func (h *VenueHandler) SearchVenues(c *gin.Context) {
 		offset = 0
 	}
 
-	venues, count, err := h.venueService.SearchVenues(city, venueType, query, minPrice, maxPrice, minCapacity, limit, offset)
+	venues, count, err := h.venueService.SearchVenues(city, venueType, query, minPrice, maxPrice, minCapacity,bookingType, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
