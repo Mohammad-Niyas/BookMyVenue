@@ -28,7 +28,7 @@ type VenueRepository interface {
 	FindPendingEditDrafts() ([]domain.VenueEditDraft, error)
 	ApproveDraftAndMerge(venue *domain.Venue, draft *domain.VenueEditDraft) error
 
-	Search(city string, venueType string, query string, minPrice, maxPrice float64, minCapacity int, limit, offset int) ([]domain.Venue, int64, error)
+	Search(city string, venueType string, query string, minPrice, maxPrice float64, minCapacity int, bookingType string, limit, offset int) ([]domain.Venue, int64, error)
 }
 type venueRepository struct {
 	db *gorm.DB
@@ -193,7 +193,7 @@ func (r *venueRepository) ApproveDraftAndMerge(venue *domain.Venue, draft *domai
 	})
 }
 
-func (r *venueRepository) Search(city string, venueType string, query string, minPrice, maxPrice float64, minCapacity int, limit, offset int) ([]domain.Venue, int64, error) {
+func (r *venueRepository) Search(city string, venueType string, query string, minPrice, maxPrice float64, minCapacity int,bookingType string, limit, offset int) ([]domain.Venue, int64, error) {
 	var venues []domain.Venue
 	var count int64
 
@@ -219,6 +219,9 @@ func (r *venueRepository) Search(city string, venueType string, query string, mi
 		}
 		if minCapacity > 0 {
 			subQuery = subQuery.Where("capacity >= ?", minCapacity)
+		}
+		if bookingType != "" {
+			subQuery = subQuery.Where("booking_type = ?", bookingType)
 		}
 		db = db.Where("id IN (?)", subQuery)
 	}
