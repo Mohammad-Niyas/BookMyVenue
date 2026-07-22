@@ -10,12 +10,13 @@ import (
 
 type SpaceRepository interface {
 	Create(space *domain.Space) error
-	FindByID(id uuid.UUID) (*domain.Space, error)
+	FindBySpaceID(id uuid.UUID) (*domain.Space, error)
 	FindByVenueID(venueID uuid.UUID) ([]domain.Space, error)
 	Update(space *domain.Space) error
 	Delete(id uuid.UUID) error
 
 	CreateSlots(slots []domain.Slot) error
+	FindBySlotID(id uuid.UUID)(*domain.Slot,error)
 	FindSlotsBySpaceIDAndDate(spaceID uuid.UUID, date time.Time) ([]domain.Slot, error)
 	DeleteUnbookedSlotsByDate(spaceID uuid.UUID, date time.Time) error
 	ReplaceSlots(spaceID uuid.UUID, date time.Time, slotsToCreate []domain.Slot) error
@@ -30,7 +31,7 @@ func NewSpaceRepository(db *gorm.DB) SpaceRepository {
 func (r *spaceRepository) Create(space *domain.Space) error {
 	return r.db.Create(space).Error
 }
-func (r *spaceRepository) FindByID(id uuid.UUID) (*domain.Space, error) {
+func (r *spaceRepository) FindBySpaceID(id uuid.UUID) (*domain.Space, error) {
 	var space domain.Space
 	err := r.db.First(&space, "id = ?", id).Error
 	if err != nil {
@@ -39,14 +40,14 @@ func (r *spaceRepository) FindByID(id uuid.UUID) (*domain.Space, error) {
 	return &space, nil
 }
 func (r *spaceRepository) FindByVenueID(venueID uuid.UUID) ([]domain.Space, error) {
-	var spaces []domain.Space
+	var space []domain.Space
 	err := r.db.Where("venue_id = ?", venueID).
 		Order("created_at ASC").
-		Find(&spaces).Error
+		Find(&space).Error
 	if err != nil {
 		return nil, err
 	}
-	return spaces, nil
+	return space, nil
 }
 func (r *spaceRepository) Update(space *domain.Space) error {
 	return r.db.Save(space).Error
@@ -60,9 +61,21 @@ func (r *spaceRepository) Delete(id uuid.UUID) error {
     })
 }
 
+// Slot
+
 func (r *spaceRepository) CreateSlots(slots []domain.Slot) error {
 	return r.db.Create(&slots).Error
 }
+
+func (r *spaceRepository)FindBySlotID(id uuid.UUID)(*domain.Slot,error){
+	var slot domain.Slot
+	err:=r.db.First(&slot,"id = ?",id).Error
+	if err!=nil{
+		return nil,err
+	}
+	return &slot,nil
+}
+
 func (r *spaceRepository) FindSlotsBySpaceIDAndDate(spaceID uuid.UUID, date time.Time) ([]domain.Slot, error) {
 	var slots []domain.Slot
 	err := r.db.Where("space_id = ? AND date = ?", spaceID, date).
