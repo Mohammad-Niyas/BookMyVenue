@@ -74,6 +74,12 @@ func (s *bookingService) CreateBooking(ctx context.Context,userID uuid.UUID, req
 	if slot.SpaceID != req.SpaceID {
     	return nil, errors.New("slot does not belong to this space")
 	}
+	if space.BookingType=="daily"{
+		minBookDate:=time.Now().AddDate(0,0,30).Truncate(24*time.Hour)
+		if slot.Date.Before(minBookDate){
+			return nil,errors.New("daily venues (auditoriums/banquet halls) must be booked at least 30 days in advance")
+		}
+	}
 
 	redisKey := "hold:slot:" + req.SlotID.String()
 	locked, err := s.rdb.SetNX(ctx, redisKey, userID.String(), 10*time.Minute).Result()
@@ -95,7 +101,7 @@ func (s *bookingService) CreateBooking(ctx context.Context,userID uuid.UUID, req
 
 	if err:=s.bookingRepo.Create(ctx,&booking);err!=nil{
 		s.rdb.Del(ctx, redisKey)
-		return nil,errors.New("booking created filed")
+		return nil,errors.New("failed to create booking record")
 	}
 	response := mapToBookingResponse(booking)
 	return &response, nil
