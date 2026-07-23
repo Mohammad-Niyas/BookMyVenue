@@ -9,12 +9,12 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.AuthHandler,adminAuthHandler *handler.AdminAuthHandler,venueHandler *handler.VenueHandler,adminVenueHandler *handler.AdminVenueHandler) *gin.Engine {
+func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.AuthHandler,adminAuthHandler *handler.AdminAuthHandler,venueHandler *handler.VenueHandler,adminVenueHandler *handler.AdminVenueHandler, bookingHandler *handler.BookingHandler) *gin.Engine {
 	r := gin.Default()
 
 	globalLimiter := handler.RateLimiter(rdb, "global", 10, 1*time.Minute)
 	loginLimiter := handler.RateLimiter(rdb, "login", 5, 15*time.Minute)
-	registerLimiter := handler.RateLimiter(rdb, "register", 3, 1*time.Hour)
+	registerLimiter := handler.RateLimiter(rdb, "register", 100, 1*time.Hour)
 	venueSubmitLimiter := handler.RateLimiter(rdb, "venue_submit", 10, 24*time.Hour)
 	venueUpdateLimiter := handler.RateLimiter(rdb, "venue_update", 30, 1*time.Hour)
 
@@ -45,17 +45,9 @@ func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.Auth
 	// Protected User/Owner Routes
 	userRoutes := r.Group("/api/user")
 	userRoutes.Use(handler.AuthMiddleware(cfg))
-	userRoutes.Use(handler.RoleMiddleware("user", "owner"))
+	userRoutes.Use(handler.RoleMiddleware("user"))
 	{
-		userRoutes.GET("/profile", func(c *gin.Context) {
-			userID, _ := c.Get("user_id")
-			role, _ := c.Get("user_role")
-			c.JSON(200, gin.H{
-				"message": "protected route working!",
-				"user_id": userID,
-				"role":    role,
-			})
-		})
+		userRoutes.POST("/bookings",globalLimiter,bookingHandler.CreateBooking)
 	}
 
 	// Protected Owner Routes
