@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 )
 
 type BookingRequest struct {
@@ -34,14 +35,16 @@ type bookingService struct{
 	spaceRepo repository.SpaceRepository
 	venueRepo repository.VenueRepository
 	rdb *redis.Client
+	db *gorm.DB
 }
 
-func NewBookingService(bookingRepo repository.BookingRepository,spaceRepo repository.SpaceRepository,venueRepo repository.VenueRepository,rdb *redis.Client) BookingService{
+func NewBookingService(bookingRepo repository.BookingRepository,spaceRepo repository.SpaceRepository,venueRepo repository.VenueRepository,rdb *redis.Client,db *gorm.DB) BookingService{
 	return &bookingService{
 		bookingRepo: bookingRepo,
 		spaceRepo: spaceRepo,
 		venueRepo: venueRepo,
 		rdb: rdb,
+		db: db,
 	}
 }
 
@@ -99,10 +102,18 @@ func (s *bookingService) CreateBooking(ctx context.Context,userID uuid.UUID, req
 		Status: "pending",
 	}
 
-	if err:=s.bookingRepo.Create(ctx,&booking);err!=nil{
+	err=s.db.Transaction(func(tx *gorm.DB) error {
+		if err:=s.bookingRepo.Create(ctx,tx,&booking);err!=nil{
+			return err
+		}
+		return nil
+	})
+
+	if err!=nil{
 		s.rdb.Del(ctx, redisKey)
-		return nil,errors.New("failed to create booking record")
+    	return nil, errors.New("failed to create booking record")
 	}
+
 	response := mapToBookingResponse(booking)
 	return &response, nil
 }
