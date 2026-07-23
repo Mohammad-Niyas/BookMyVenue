@@ -451,7 +451,7 @@ func (s *venueService) AddSpace(ownerID uuid.UUID, venueID uuid.UUID, req Create
 }
 
 func (s *venueService) UpdateSpace(ownerID uuid.UUID, spaceID uuid.UUID, req CreateSpaceRequest) (*SpaceResponse, error) {
-	space, err := s.spaceRepo.FindByID(spaceID)
+	space, err := s.spaceRepo.FindBySpaceID(spaceID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("space not found")
@@ -498,7 +498,7 @@ func (s *venueService) UpdateSpace(ownerID uuid.UUID, spaceID uuid.UUID, req Cre
 }
 
 func (s *venueService) DeleteSpace(ownerID uuid.UUID, spaceID uuid.UUID) error {
-	space, err := s.spaceRepo.FindByID(spaceID)
+	space, err := s.spaceRepo.FindBySpaceID(spaceID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("space not found")
@@ -640,7 +640,7 @@ var timeFormatRegex = regexp.MustCompile(`^([0-1][0-9]|2[0-3]):[0-5][0-9]$`)
 
 
 func (s *venueService) GenerateSlots(ownerID uuid.UUID, spaceID uuid.UUID, req GenerateSlotsRequest) ([]SlotResponse, error) {
-	space, err := s.spaceRepo.FindByID(spaceID)
+	space, err := s.spaceRepo.FindBySpaceID(spaceID)
 	if err != nil {
 		return nil, errors.New("space not found")
 	}
@@ -712,7 +712,7 @@ func (s *venueService) GenerateSlots(ownerID uuid.UUID, spaceID uuid.UUID, req G
 }
 
 func (s *venueService) GetAvailableSlots(spaceID uuid.UUID, dateStr string) ([]SlotResponse, error) {
-	space, err := s.spaceRepo.FindByID(spaceID)
+	space, err := s.spaceRepo.FindBySpaceID(spaceID)
 	if err != nil {
 		return nil, errors.New("space not found")
 	}
