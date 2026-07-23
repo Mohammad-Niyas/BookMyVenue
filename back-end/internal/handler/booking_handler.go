@@ -77,6 +77,10 @@ func (h *BookingHandler) CreateBooking(c *gin.Context){
 			c.JSON(http.StatusInternalServerError,gin.H{"error":err.Error()})
 			return 
 		}
+		if err.Error()=="daily venues (auditoriums/banquet halls) must be booked at least 30 days in advance"{
+			c.JSON(http.StatusBadRequest,gin.H{"error":err.Error()})
+			return 
+		}
 		if err.Error()=="booking created filed"{
 			c.JSON(http.StatusInternalServerError,gin.H{"error":err.Error()})
 			return
