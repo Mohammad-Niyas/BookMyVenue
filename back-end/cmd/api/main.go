@@ -42,26 +42,26 @@ func main() {
 		log.Printf("⚠️  S3 Client not initialized: %v (presigned URLs won't work)", err)
 	}
 
-	// User & Owner
-	userRepo := repository.NewUserRepository(db)
-	authService := service.NewAuthService(userRepo, cfg)
-	authHandler := handler.NewAuthHandler(authService)
-
-	// Admin
-	adminRepo := repository.NewAdminRepository(db)
-	adminAuthService := service.NewAdminAuthService(adminRepo, cfg)
-	adminAuthHandler := handler.NewAdminAuthHandler(adminAuthService)
-
-	// Venue
-	venueRepo := repository.NewVenueRepository(db)
-	spaceRepo := repository.NewSpaceRepository(db)
-	venueService := service.NewVenueService(venueRepo, spaceRepo, s3Client,rdb)
-	venueHandler := handler.NewVenueHandler(venueService)
-
+	// 1. Repositories
+	userRepo    := repository.NewUserRepository(db)
+	adminRepo   := repository.NewAdminRepository(db)
+	venueRepo   := repository.NewVenueRepository(db)
+	spaceRepo   := repository.NewSpaceRepository(db)
+	bookingRepo := repository.NewBookingRepository(db)
+	// 2. Services (Now spaceRepo, venueRepo, and rdb exist above!)
+	authService       := service.NewAuthService(userRepo, cfg)
+	adminAuthService  := service.NewAdminAuthService(adminRepo, cfg)
+	venueService      := service.NewVenueService(venueRepo, spaceRepo, s3Client, rdb)
 	adminVenueService := service.NewAdminVenueService(venueRepo)
+	bookingService    := service.NewBookingService(bookingRepo, spaceRepo, venueRepo, rdb)
+	// 3. Handlers
+	authHandler       := handler.NewAuthHandler(authService)
+	adminAuthHandler  := handler.NewAdminAuthHandler(adminAuthService)
+	venueHandler      := handler.NewVenueHandler(venueService)
 	adminVenueHandler := handler.NewAdminVenueHandler(adminVenueService)
+	bookingHandler    := handler.NewBookingHandler(bookingService)
 
-	r := router.SetupRouter(cfg,rdb, authHandler,adminAuthHandler,venueHandler,adminVenueHandler)
+	r := router.SetupRouter(cfg,rdb, authHandler,adminAuthHandler,venueHandler,adminVenueHandler,bookingHandler)
 
 	port := fmt.Sprintf(":%s", cfg.ServerPort)
 	log.Printf("🚀 BookMyVenue server starting on port %s", cfg.ServerPort)
