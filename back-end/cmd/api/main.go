@@ -53,7 +53,7 @@ func main() {
 	adminAuthService  := service.NewAdminAuthService(adminRepo, cfg)
 	venueService      := service.NewVenueService(venueRepo, spaceRepo, s3Client, rdb)
 	adminVenueService := service.NewAdminVenueService(venueRepo)
-	bookingService    := service.NewBookingService(bookingRepo, spaceRepo, venueRepo, rdb)
+	bookingService    := service.NewBookingService(bookingRepo, spaceRepo, venueRepo, rdb,db)
 	// 3. Handlers
 	authHandler       := handler.NewAuthHandler(authService)
 	adminAuthHandler  := handler.NewAdminAuthHandler(adminAuthService)
