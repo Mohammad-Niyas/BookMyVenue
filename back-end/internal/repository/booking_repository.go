@@ -2,12 +2,13 @@ package repository
 
 import (
 	"bookmyvenue/internal/domain"
+	"context"
 
 	"gorm.io/gorm"
 )
 
 type BookingRepository interface{
-	Create(booking *domain.Booking) error
+	 Create(ctx context.Context, booking *domain.Booking) error
 }
 
 type bookingRepository struct{
@@ -18,8 +19,8 @@ func NewBookingRepository(db *gorm.DB) BookingRepository {
 	return &bookingRepository{db: db}
 }
 
-func (r *bookingRepository) Create(booking *domain.Booking) error{
-	return r.db.Create(booking).Error
+func (r *bookingRepository)  Create(ctx context.Context, booking *domain.Booking) error{
+	return r.db.WithContext(ctx).Create(booking).Error
 }
 
 

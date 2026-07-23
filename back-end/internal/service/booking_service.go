@@ -93,7 +93,7 @@ func (s *bookingService) CreateBooking(ctx context.Context,userID uuid.UUID, req
 		Status: "pending",
 	}
 
-	if err:=s.bookingRepo.Create(&booking);err!=nil{
+	if err:=s.bookingRepo.Create(ctx,&booking);err!=nil{
 		s.rdb.Del(ctx, redisKey)
 		return nil,errors.New("booking created filed")
 	}
