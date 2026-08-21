@@ -39,7 +39,7 @@ func main() {
 	// S3 Client
 	s3Client, err := s3.NewS3Client(cfg)
 	if err != nil {
-		log.Printf("⚠️  S3 Client not initialized: %v (presigned URLs won't work)", err)
+		log.Printf("S3 Client not initialized: %v (presigned URLs won't work)", err)
 	}
 
 	// 1. Repositories
@@ -64,7 +64,7 @@ func main() {
 	r := router.SetupRouter(cfg,rdb, authHandler,adminAuthHandler,venueHandler,adminVenueHandler,bookingHandler)
 
 	port := fmt.Sprintf(":%s", cfg.ServerPort)
-	log.Printf("🚀 BookMyVenue server starting on port %s", cfg.ServerPort)
+	log.Printf("BookMyVenue server starting on port %s", cfg.ServerPort)
 	if err := r.Run(port); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
