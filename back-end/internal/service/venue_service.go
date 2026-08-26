@@ -416,6 +416,13 @@ func (s *venueService) AddSpace(ownerID uuid.UUID, venueID uuid.UUID, req Create
 		}
 		return nil, errors.New("failed to fetch venue")
 	}
+	exists, err := s.spaceRepo.ExistsByName(ownerID,req.Name)
+	if err != nil {
+		return nil, errors.New("failed to verify duplicate space status")
+	}
+	if exists {
+		return nil, errors.New("a space with this name and address already exists")
+	}
 	if venue.OwnerID != ownerID {
 		return nil, errors.New("unauthorized: you don't own this venue")
 	}
