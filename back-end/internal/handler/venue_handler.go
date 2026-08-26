@@ -240,6 +240,14 @@ func (h *VenueHandler) AddSpace(c *gin.Context) {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
+		if err.Error()=="failed to verify duplicate space status"{
+			c.JSON(http.StatusConflict,gin.H{"error":err.Error()})
+			return
+		}
+		if err.Error()=="a space with this name and address already exists"{
+			c.JSON(http.StatusConflict,gin.H{"error":err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
