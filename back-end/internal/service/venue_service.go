@@ -25,7 +25,7 @@ type CreateVenueRequest struct {
 	Address     string   `json:"address" binding:"required"`
 	City        string   `json:"city" binding:"required"`
 	Rules       string   `json:"rules"`
-	Timings     string   `json:"timings" binding:"required"` 
+	Timings     string   `json:"timings" binding:"required"`
 	Images      []string `json:"images" binding:"required"`
 }
 type CreateSpaceRequest struct {
@@ -118,7 +118,7 @@ type VenueService interface {
 	DeleteVenue(ownerID uuid.UUID, venueID uuid.UUID) error
 	ToggleVenueStatus(ownerID uuid.UUID, venueID uuid.UUID) (*VenueResponse, error)
 
-	// Space 
+	// Space
 	AddSpace(ownerID uuid.UUID, venueID uuid.UUID, req CreateSpaceRequest) (*SpaceResponse, error)
 	UpdateSpace(ownerID uuid.UUID, spaceID uuid.UUID, req CreateSpaceRequest) (*SpaceResponse, error)
 	DeleteSpace(ownerID uuid.UUID, spaceID uuid.UUID) error
@@ -127,7 +127,7 @@ type VenueService interface {
 	GenerateSlots(ownerID uuid.UUID, spaceID uuid.UUID, req GenerateSlotsRequest) ([]SlotResponse, error)
 	GetAvailableSlots(spaceID uuid.UUID, dateStr string) ([]SlotResponse, error)
 
-	// S3 
+	// S3
 	GeneratePresignedURL(ctx context.Context, fileName string, contentType string) (*PresignedURLResponse, error)
 }
 
@@ -138,12 +138,12 @@ type venueService struct {
 	rdb       *redis.Client
 }
 
-func NewVenueService(venueRepo repository.VenueRepository, spaceRepo repository.SpaceRepository, s3Client s3.S3Client,  rdb *redis.Client) VenueService {
+func NewVenueService(venueRepo repository.VenueRepository, spaceRepo repository.SpaceRepository, s3Client s3.S3Client, rdb *redis.Client) VenueService {
 	return &venueService{
 		venueRepo: venueRepo,
 		spaceRepo: spaceRepo,
 		s3Client:  s3Client,
-		rdb:rdb,
+		rdb:       rdb,
 	}
 }
 
@@ -282,7 +282,7 @@ func (s *venueService) UpdateVenue(ownerID uuid.UUID, venueID uuid.UUID, req Upd
 		return nil, false, errors.New("unauthorized: you don't own this venue")
 	}
 	if venue.Status == "suspended" {
-    	return nil, false, errors.New("cannot edit a suspended venue: please contact admin support")
+		return nil, false, errors.New("cannot edit a suspended venue: please contact admin support")
 	}
 	if req.Timings != nil {
 		if !timingsRegex.MatchString(*req.Timings) {
@@ -300,15 +300,31 @@ func (s *venueService) UpdateVenue(ownerID uuid.UUID, venueID uuid.UUID, req Upd
 		if hasMajorChanges {
 			existingDraft, err := s.venueRepo.FindPendingDraftByVenueID(venueID)
 			if err == nil && existingDraft != nil {
-				if req.Name != nil { existingDraft.Name = *req.Name }
-				if req.Description != nil { existingDraft.Description = *req.Description }
-				if req.Type != nil { existingDraft.Type = *req.Type }
-				if req.Address != nil { existingDraft.Address = *req.Address }
-				if req.City != nil { existingDraft.City = *req.City }
-				if req.Rules != nil { existingDraft.Rules = *req.Rules }
-				if req.Timings != nil { existingDraft.Timings = *req.Timings }
-				if req.Images != nil { existingDraft.Images = req.Images }
-				
+				if req.Name != nil {
+					existingDraft.Name = *req.Name
+				}
+				if req.Description != nil {
+					existingDraft.Description = *req.Description
+				}
+				if req.Type != nil {
+					existingDraft.Type = *req.Type
+				}
+				if req.Address != nil {
+					existingDraft.Address = *req.Address
+				}
+				if req.City != nil {
+					existingDraft.City = *req.City
+				}
+				if req.Rules != nil {
+					existingDraft.Rules = *req.Rules
+				}
+				if req.Timings != nil {
+					existingDraft.Timings = *req.Timings
+				}
+				if req.Images != nil {
+					existingDraft.Images = req.Images
+				}
+
 				if err := s.venueRepo.UpdateEditDraft(existingDraft); err != nil {
 					return nil, false, errors.New("failed to update pending edit request")
 				}
@@ -327,14 +343,30 @@ func (s *venueService) UpdateVenue(ownerID uuid.UUID, venueID uuid.UUID, req Upd
 				Images:      venue.Images,
 				Status:      "pending_review",
 			}
-			if req.Name != nil { draft.Name = *req.Name }
-			if req.Description != nil { draft.Description = *req.Description }
-			if req.Type != nil { draft.Type = *req.Type }
-			if req.Address != nil { draft.Address = *req.Address }
-			if req.City != nil { draft.City = *req.City }
-			if req.Rules != nil { draft.Rules = *req.Rules }
-			if req.Timings != nil { draft.Timings = *req.Timings }
-			if req.Images != nil { draft.Images = req.Images }
+			if req.Name != nil {
+				draft.Name = *req.Name
+			}
+			if req.Description != nil {
+				draft.Description = *req.Description
+			}
+			if req.Type != nil {
+				draft.Type = *req.Type
+			}
+			if req.Address != nil {
+				draft.Address = *req.Address
+			}
+			if req.City != nil {
+				draft.City = *req.City
+			}
+			if req.Rules != nil {
+				draft.Rules = *req.Rules
+			}
+			if req.Timings != nil {
+				draft.Timings = *req.Timings
+			}
+			if req.Images != nil {
+				draft.Images = req.Images
+			}
 			if err := s.venueRepo.CreateEditDraft(draft); err != nil {
 				return nil, false, errors.New("failed to submit edit request")
 			}
@@ -342,14 +374,30 @@ func (s *venueService) UpdateVenue(ownerID uuid.UUID, venueID uuid.UUID, req Upd
 			return mapToVenueResponse(venue), true, nil
 		}
 	}
-	if req.Name != nil { venue.Name = *req.Name }
-	if req.Description != nil { venue.Description = *req.Description }
-	if req.Type != nil { venue.Type = *req.Type }
-	if req.Address != nil { venue.Address = *req.Address }
-	if req.City != nil { venue.City = *req.City }
-	if req.Rules != nil { venue.Rules = *req.Rules }
-	if req.Timings != nil { venue.Timings = *req.Timings }
-	if req.Images != nil { venue.Images = req.Images }
+	if req.Name != nil {
+		venue.Name = *req.Name
+	}
+	if req.Description != nil {
+		venue.Description = *req.Description
+	}
+	if req.Type != nil {
+		venue.Type = *req.Type
+	}
+	if req.Address != nil {
+		venue.Address = *req.Address
+	}
+	if req.City != nil {
+		venue.City = *req.City
+	}
+	if req.Rules != nil {
+		venue.Rules = *req.Rules
+	}
+	if req.Timings != nil {
+		venue.Timings = *req.Timings
+	}
+	if req.Images != nil {
+		venue.Images = req.Images
+	}
 	if venue.Status == "rejected" {
 		venue.Status = "pending"
 	}
@@ -416,7 +464,7 @@ func (s *venueService) AddSpace(ownerID uuid.UUID, venueID uuid.UUID, req Create
 		}
 		return nil, errors.New("failed to fetch venue")
 	}
-	exists, err := s.spaceRepo.ExistsByName(venueID,req.Name)
+	exists, err := s.spaceRepo.ExistsByName(venueID, req.Name)
 	if err != nil {
 		return nil, errors.New("failed to verify duplicate space status")
 	}
@@ -433,7 +481,7 @@ func (s *venueService) AddSpace(ownerID uuid.UUID, venueID uuid.UUID, req Create
 		return nil, errors.New("maximum limit of 10 spaces per venue has been reached")
 	}
 	imgCount := len(req.Images)
-	if imgCount > 0 { 
+	if imgCount > 0 {
 		if imgCount > 5 {
 			return nil, errors.New("a space cannot have more than 5 images")
 		}
@@ -561,9 +609,9 @@ func (s *venueService) clearSearchCache() {
 	}
 }
 
-func (s *venueService) SearchVenues(city string, venueType string, query string, minPrice, maxPrice float64, minCapacity int, bookingType string, limit, offset int) ([]VenueResponse, int64, error)  {
+func (s *venueService) SearchVenues(city string, venueType string, query string, minPrice, maxPrice float64, minCapacity int, bookingType string, limit, offset int) ([]VenueResponse, int64, error) {
 	ctx := context.Background()
-	
+
 	cacheKey := fmt.Sprintf("search:city:%s:type:%s:query:%s:min_price:%f:max_price:%f:min_capacity:%d:booking_type:%s:limit:%d:offset:%d",
 		city, venueType, query, minPrice, maxPrice, minCapacity, bookingType, limit, offset)
 
@@ -607,7 +655,7 @@ func (s *venueService) GetPublicVenueByID(venueID uuid.UUID) (*VenueResponse, er
 		}
 		return nil, errors.New("failed to fetch venue details")
 	}
-	
+
 	if venue.Status != "approved" && venue.Status != "active" {
 		return nil, errors.New("venue is not available")
 	}
@@ -616,7 +664,7 @@ func (s *venueService) GetPublicVenueByID(venueID uuid.UUID) (*VenueResponse, er
 
 func (s *venueService) mapToSlotResponse(slot domain.Slot, spacePrice float64) SlotResponse {
 	dateStr := slot.Date.Format("2006-01-02")
-	
+
 	actualPrice := spacePrice
 	if slot.Price != nil {
 		actualPrice = *slot.Price
@@ -644,7 +692,6 @@ func isOverlapping(s1, e1, s2, e2 string) bool {
 }
 
 var timeFormatRegex = regexp.MustCompile(`^([0-1][0-9]|2[0-3]):[0-5][0-9]$`)
-
 
 func (s *venueService) GenerateSlots(ownerID uuid.UUID, spaceID uuid.UUID, req GenerateSlotsRequest) ([]SlotResponse, error) {
 	space, err := s.spaceRepo.FindBySpaceID(spaceID)
@@ -682,7 +729,10 @@ func (s *venueService) GenerateSlots(ownerID uuid.UUID, spaceID uuid.UUID, req G
 			return nil, fmt.Errorf("slots %s-%s and %s-%s overlap with each other", current.StartTime, current.EndTime, next.StartTime, next.EndTime)
 		}
 	}
-	existingSlots, _ := s.spaceRepo.FindSlotsBySpaceIDAndDate(spaceID, parsedDate)
+	existingSlots, err := s.spaceRepo.FindSlotsBySpaceIDAndDate(spaceID, parsedDate)
+	if err != nil {
+		return nil, errors.New("failed to fetch existing slots for validation")
+	}
 	for _, inputSlot := range req.Slots {
 		for _, dbSlot := range existingSlots {
 			if dbSlot.StartTime != nil && dbSlot.EndTime != nil {
@@ -733,6 +783,3 @@ func (s *venueService) GetAvailableSlots(spaceID uuid.UUID, dateStr string) ([]S
 	}
 	return s.mapToSlotResponses(slots, space.Price), nil
 }
-
-
-
