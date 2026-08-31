@@ -14,7 +14,7 @@ type SpaceRepository interface {
 	FindByVenueID(venueID uuid.UUID) ([]domain.Space, error)
 	Update(space *domain.Space) error
 	Delete(id uuid.UUID) error
-	ExistsByName(ownerID uuid.UUID, name string) (bool, error)
+	ExistsByName(venueID uuid.UUID, name string) (bool, error)
 
 	CreateSlots(slots []domain.Slot) error
 	FindBySlotID(id uuid.UUID)(*domain.Slot,error)
@@ -61,10 +61,10 @@ func (r *spaceRepository) Delete(id uuid.UUID) error {
         return tx.Delete(&domain.Space{}, "id = ?", id).Error
     })
 }
-func (r *spaceRepository) ExistsByName(ownerID uuid.UUID, name string) (bool, error){
+func (r *spaceRepository) ExistsByName(venueID uuid.UUID, name string) (bool, error){
 	var count int64
     err := r.db.Model(&domain.Space{}).
-        Where("owner_id = ? AND name = ? ", ownerID, name).
+        Where("venue_id = ? AND name = ? ", venueID, name).
         Count(&count).Error
     return count > 0, err
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Lua script for run Token Bucket algorithm in Redis
+// Lua script for Token Bucket algorithm in Redis
 const tokenBucketScript = `
 local key = KEYS[1]
 local capacity = tonumber(ARGV[1])
