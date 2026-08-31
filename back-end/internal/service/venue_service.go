@@ -416,7 +416,7 @@ func (s *venueService) AddSpace(ownerID uuid.UUID, venueID uuid.UUID, req Create
 		}
 		return nil, errors.New("failed to fetch venue")
 	}
-	exists, err := s.spaceRepo.ExistsByName(ownerID,req.Name)
+	exists, err := s.spaceRepo.ExistsByName(venueID,req.Name)
 	if err != nil {
 		return nil, errors.New("failed to verify duplicate space status")
 	}
