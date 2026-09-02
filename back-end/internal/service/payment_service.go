@@ -87,26 +87,38 @@ func (s *paymentService) CreatePaymentOrder(ctx context.Context, userID uuid.UUI
 	if booking.UserID != userID {
 		return nil, errors.New("unauthorized: you do not own this booking")
 	}
-	if booking.Status != "pending" {
-		return nil, errors.New("cannot create payment: booking is not pending payment")
+	if booking.AmountPaid >= booking.TotalAmount && booking.TotalAmount > 0 {
+		return nil, errors.New("cannot create payment: booking is already fully paid")
+	}
+	slot, err := s.spaceRepo.FindBySlotID(booking.SlotID)
+	if err != nil {
+		return nil, errors.New("slot details not found")
 	}
 
-	// Verify Redis temporary slot hold is still ACTIVE and has at least 2 minutes remaining
-	redisKey := "hold:slot:" + booking.SlotID.String()
-	heldUser, err := s.rdb.Get(ctx, redisKey).Result()
-	if err != nil || heldUser != userID.String() {
-		return nil, errors.New("booking slot hold has expired: please create a new booking")
-	}
-	ttl, err := s.rdb.TTL(ctx, redisKey).Result()
-	if err != nil || ttl < 1*time.Minute {
-		return nil, errors.New("booking slot hold is expiring in less than 1 minute: please create a fresh booking for safe payment")
+
+
+		// For Installment 1 (Initial booking): Verify 10-minute Redis Hold
+	if booking.AmountPaid == 0 {
+		redisKey := "hold:slot:" + booking.SlotID.String()
+		heldUser, err := s.rdb.Get(ctx, redisKey).Result()
+		if err != nil || heldUser != userID.String() {
+			return nil, errors.New("booking slot hold has expired: please create a new booking")
+		}
+		ttl, err := s.rdb.TTL(ctx, redisKey).Result()
+		if err != nil || ttl < 1*time.Minute {
+			return nil, errors.New("booking slot hold is expiring in less than 1 minute: please create a fresh booking for safe payment")
+		}
+	} else {
+		// For Installment 2 (70% Balance): Check 7-Day Pre-Event Deadline Rule
+		cutoffDate := slot.Date.AddDate(0, 0, -7).Truncate(24 * time.Hour)
+		today := time.Now().Truncate(24 * time.Hour)
+		if today.After(cutoffDate) {
+			return nil, errors.New("the deadline to settle the remaining balance (at least 7 days before event date) has expired")
+		}
 	}
 
 	existingPayment, err := s.paymentRepo.FindByBookingID(booking.ID)
 	if err == nil && existingPayment != nil {
-		if existingPayment.Status == "captured" {
-			return nil, errors.New("payment has already been completed for this booking")
-		}
 		if existingPayment.Status == "created" {
 			return &CreatePaymentOrderResponse{
 				PaymentID:       existingPayment.ID,
@@ -119,26 +131,35 @@ func (s *paymentService) CreatePaymentOrder(ctx context.Context, userID uuid.UUI
 			}, nil
 		}
 	}
+
 	space, err := s.spaceRepo.FindBySpaceID(booking.SpaceID)
 	if err != nil {
 		return nil, errors.New("space details not found")
 	}
 	payableAmount := booking.TotalAmount
 	if space.BookingType == "daily" && space.Capacity > 4 {
-		payableAmount = booking.TotalAmount * 0.30
+		if booking.AmountPaid == 0 {
+			payableAmount = booking.TotalAmount * 0.30
+		} else {
+			payableAmount = booking.TotalAmount - booking.AmountPaid
+		}
 	}
-	amountInPaise := int64(payableAmount * 100)
 
+	amountInPaise := int64(payableAmount * 100)
+	
 	rzpOrderID := "order_" + uuid.New().String()[:14]
+
 	payment := &domain.Payment{
 		BookingID:       booking.ID,
 		RazorpayOrderID: rzpOrderID,
 		Amount:          payableAmount,
 		Status:          "created",
 	}
+
 	if err := s.paymentRepo.CreateOrder(payment); err != nil {
 		return nil, errors.New("failed to save payment order")
 	}
+	
 	res := mapToPaymentOrderResponse(*payment, amountInPaise, s.keyID)
 	return &res, nil
 }
