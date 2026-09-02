@@ -48,20 +48,26 @@ func main() {
 	venueRepo   := repository.NewVenueRepository(db)
 	spaceRepo   := repository.NewSpaceRepository(db)
 	bookingRepo := repository.NewBookingRepository(db)
+	paymentRepo := repository.NewPaymentRepository(db)
+
 	// 2. Services (Now spaceRepo, venueRepo, and rdb exist above!)
 	authService       := service.NewAuthService(userRepo, cfg)
 	adminAuthService  := service.NewAdminAuthService(adminRepo, cfg)
 	venueService      := service.NewVenueService(venueRepo, spaceRepo, s3Client, rdb)
 	adminVenueService := service.NewAdminVenueService(venueRepo)
 	bookingService    := service.NewBookingService(bookingRepo, spaceRepo, venueRepo, rdb,db)
+	paymentService    := service.NewPaymentService(paymentRepo, spaceRepo, rdb, db, cfg.RazorpayKeyID, cfg.RazorpayKeySecret)
+
 	// 3. Handlers
 	authHandler       := handler.NewAuthHandler(authService)
 	adminAuthHandler  := handler.NewAdminAuthHandler(adminAuthService)
 	venueHandler      := handler.NewVenueHandler(venueService)
 	adminVenueHandler := handler.NewAdminVenueHandler(adminVenueService)
 	bookingHandler    := handler.NewBookingHandler(bookingService)
+	paymentHandler    := handler.NewPaymentHandler(paymentService)
 
-	r := router.SetupRouter(cfg,rdb, authHandler,adminAuthHandler,venueHandler,adminVenueHandler,bookingHandler)
+
+	r := router.SetupRouter(cfg,rdb, authHandler,adminAuthHandler,venueHandler,adminVenueHandler,bookingHandler,paymentHandler)
 
 	port := fmt.Sprintf(":%s", cfg.ServerPort)
 	log.Printf("BookMyVenue server starting on port %s", cfg.ServerPort)

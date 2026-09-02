@@ -58,8 +58,7 @@ func (r *venueRepository) Create(venue *domain.Venue) error {
 
 func (r *venueRepository) FindByID(id uuid.UUID) (*domain.Venue, error) {
 	var venue domain.Venue
-	err := r.db.Preload("Spaces").Preload("CancellationPolicy").
-		First(&venue, "id = ?", id).Error
+	err := r.db.Preload("Spaces").Preload("CancellationPolicy").First(&venue, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
