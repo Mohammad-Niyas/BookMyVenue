@@ -200,10 +200,3 @@ func (s *paymentService) VerifyPayment(ctx context.Context, userID uuid.UUID, re
 		PaymentStatus: "captured",
 	}, nil
 }
-
-
-
-
-
-
-
