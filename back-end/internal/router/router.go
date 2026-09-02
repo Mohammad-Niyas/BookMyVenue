@@ -9,7 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.AuthHandler,adminAuthHandler *handler.AdminAuthHandler,venueHandler *handler.VenueHandler,adminVenueHandler *handler.AdminVenueHandler, bookingHandler *handler.BookingHandler) *gin.Engine {
+func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.AuthHandler,adminAuthHandler *handler.AdminAuthHandler,venueHandler *handler.VenueHandler,adminVenueHandler *handler.AdminVenueHandler, bookingHandler *handler.BookingHandler,paymentHandler *handler.PaymentHandler) *gin.Engine {
 	r := gin.Default()
 
 	globalLimiter := handler.RateLimiter(rdb, "global", 10, 1*time.Minute)
@@ -48,6 +48,10 @@ func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.Auth
 	userRoutes.Use(handler.RoleMiddleware("user"))
 	{
 		userRoutes.POST("/bookings",globalLimiter,bookingHandler.CreateBooking)
+
+		// Payment Endpoints
+		userRoutes.POST("/payments/order", globalLimiter, paymentHandler.CreatePaymentOrder)
+		userRoutes.POST("/payments/verify", globalLimiter, paymentHandler.VerifyPayment)
 	}
 
 	// Protected Owner Routes

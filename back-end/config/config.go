@@ -32,6 +32,9 @@ type Config struct {
 	AWSS3Bucket        string
 	// RabbitMQ
 	RabbitMQURL        string
+	// Razorpay
+	RazorpayKeyID     string
+    RazorpayKeySecret string
 	// Server
 	ServerPort string
 }
@@ -86,6 +89,9 @@ func LoadConfig() *Config {
 	accessExpiry := getEnvAsInt("ACCESS_TOKEN_EXPIRY_MINS", 15)
 	refreshExpiry := getEnvAsInt("REFRESH_TOKEN_EXPIRY_DAYS", 30)
 
+	razorpayKeyID := getEnvOrDefault("RAZORPAY_KEY_ID", "rzp_test_placeholder")
+	razorpayKeySecret := getEnvOrDefault("RAZORPAY_KEY_SECRET", "rzp_secret_placeholder")
+
 	serverPort := getEnvOrDefault("SERVER_PORT", "8080")
 
 
@@ -109,6 +115,8 @@ func LoadConfig() *Config {
 		AWSSecretAccessKey: awsSecretKey,
 		AWSS3Bucket: awsBucket,
 		RabbitMQURL: rabbitURL,
+		RazorpayKeyID: razorpayKeyID,
+		RazorpayKeySecret: razorpayKeySecret,
 	}
 }
 
