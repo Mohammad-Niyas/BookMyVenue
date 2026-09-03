@@ -1,5 +1,3 @@
-# BookMyVenue
-
 # 🏟️ BookMyVenue
 
 A robust, multi-tenant venue and slot booking backend service built in **Go (Golang)** using **Clean Architecture**. BookMyVenue handles the end-to-end operational lifecycle: venue owner onboarding, AWS S3 image uploads via presigned URLs, schedule generation, Redis-based distributed concurrency holds, and multi-stage payment settlements with cryptographic verification.
