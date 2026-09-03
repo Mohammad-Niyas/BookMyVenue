@@ -42,7 +42,7 @@ func main() {
 		log.Printf("S3 Client not initialized: %v (presigned URLs won't work)", err)
 	}
 
-	// 1. Repositories
+	// Repositories
 	userRepo    := repository.NewUserRepository(db)
 	adminRepo   := repository.NewAdminRepository(db)
 	venueRepo   := repository.NewVenueRepository(db)
@@ -50,7 +50,7 @@ func main() {
 	bookingRepo := repository.NewBookingRepository(db)
 	paymentRepo := repository.NewPaymentRepository(db)
 
-	// 2. Services (Now spaceRepo, venueRepo, and rdb exist above!)
+	// Services 
 	authService       := service.NewAuthService(userRepo, cfg)
 	adminAuthService  := service.NewAdminAuthService(adminRepo, cfg)
 	venueService      := service.NewVenueService(venueRepo, spaceRepo, s3Client, rdb)
@@ -58,7 +58,7 @@ func main() {
 	bookingService    := service.NewBookingService(bookingRepo, spaceRepo, venueRepo, rdb,db)
 	paymentService    := service.NewPaymentService(paymentRepo, spaceRepo, rdb, db, cfg.RazorpayKeyID, cfg.RazorpayKeySecret)
 
-	// 3. Handlers
+	// Handlers
 	authHandler       := handler.NewAuthHandler(authService)
 	adminAuthHandler  := handler.NewAdminAuthHandler(adminAuthService)
 	venueHandler      := handler.NewVenueHandler(venueService)
