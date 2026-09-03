@@ -77,7 +77,7 @@ func (s *bookingService) CreateBooking(ctx context.Context,userID uuid.UUID, req
 	if slot.SpaceID != req.SpaceID {
     	return nil, errors.New("slot does not belong to this space")
 	}
-	if space.BookingType=="daily"&& space.Capacity > 5{
+	if space.BookingType=="daily"&& space.Capacity > 4{
 		minBookDate:=time.Now().AddDate(0,0,30).Truncate(24*time.Hour)
 		if slot.Date.Before(minBookDate){
 			return nil,errors.New("daily venues (auditoriums/banquet halls) must be booked at least 30 days in advance")
