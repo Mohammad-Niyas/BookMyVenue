@@ -137,7 +137,7 @@ func (s *paymentService) CreatePaymentOrder(ctx context.Context, userID uuid.UUI
 		return nil, errors.New("space details not found")
 	}
 	payableAmount := booking.TotalAmount
-	if space.BookingType == "daily" && space.Capacity > 4 {
+	if space.BookingType == "daily" && space.Capacity >= 200 {
 		if booking.AmountPaid == 0 {
 			payableAmount = booking.TotalAmount * 0.30
 		} else {
@@ -212,7 +212,6 @@ func (s *paymentService) VerifyPayment(ctx context.Context, userID uuid.UUID, re
 		return nil, errors.New("failed to confirm booking and capture payment in database")
 	}
 	
-	// Delete Redis Temporary Hold
 	s.rdb.Del(ctx, "hold:slot:"+booking.SlotID.String())
 
 	return &VerifyPaymentResponse{
