@@ -12,7 +12,7 @@ import (
 func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.AuthHandler,adminAuthHandler *handler.AdminAuthHandler,venueHandler *handler.VenueHandler,adminVenueHandler *handler.AdminVenueHandler, bookingHandler *handler.BookingHandler,paymentHandler *handler.PaymentHandler) *gin.Engine {
 	r := gin.Default()
 
-	globalLimiter := handler.RateLimiter(rdb, "global", 10, 1*time.Minute)
+	globalLimiter := handler.RateLimiter(rdb, "global", 25, 1*time.Minute)
 	loginLimiter := handler.RateLimiter(rdb, "login", 5, 15*time.Minute)
 	registerLimiter := handler.RateLimiter(rdb, "register", 100, 1*time.Hour)
 	venueSubmitLimiter := handler.RateLimiter(rdb, "venue_submit", 10, 24*time.Hour)
