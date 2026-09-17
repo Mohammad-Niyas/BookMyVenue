@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"bookmyvenue/config"
 	"bookmyvenue/internal/domain"
@@ -10,6 +12,7 @@ import (
 	"bookmyvenue/internal/repository"
 	"bookmyvenue/internal/router"
 	"bookmyvenue/internal/service"
+	"bookmyvenue/pkg/rabbitmq"
 	"bookmyvenue/pkg/s3"
 )
 
@@ -40,6 +43,25 @@ func main() {
 	s3Client, err := s3.NewS3Client(cfg)
 	if err != nil {
 		log.Printf("S3 Client not initialized: %v (presigned URLs won't work)", err)
+	}
+
+	// RabbitMQ Client & Background Workers
+	rabbitClient, err := rabbitmq.NewRabbitMQ(cfg.RabbitMQURL)
+	if err != nil {
+		log.Printf("[RabbitMQ] WARNING: Could not connect to RabbitMQ: %v (Outbox poller disabled)", err)
+	} else {
+		defer rabbitClient.Close()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		// Outbox Worker
+		outboxService := service.NewOutboxService(db, rabbitClient, 5*time.Second)
+		go outboxService.Start(ctx)
+
+		// Notification Consumer
+		notificationConsumer := service.NewNotificationConsumer(rabbitClient)
+		go notificationConsumer.Start(ctx)
 	}
 
 	// Repositories
