@@ -1,0 +1,19 @@
+# Where the schema is located
+schema:
+  - graph/*.graphqls
+
+# Where generated Go structs for GraphQL types go
+exec:
+  filename: graph/generated.go
+  package: graph
+
+# Where GraphQL specific data models live
+model:
+  filename: graph/model/models_gen.go
+  package: model
+
+# Where typed resolver logic will be scaffolded
+resolver:
+  layout: follow-schema
+  dir: graph
+  package: graph

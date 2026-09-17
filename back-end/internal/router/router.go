@@ -2,14 +2,17 @@ package router
 
 import (
 	"bookmyvenue/config"
+	"bookmyvenue/graph"
 	"bookmyvenue/internal/handler"
 	"time"
-
+	
+	gqlhandler "github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 )
 
-func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.AuthHandler,adminAuthHandler *handler.AdminAuthHandler,venueHandler *handler.VenueHandler,adminVenueHandler *handler.AdminVenueHandler, bookingHandler *handler.BookingHandler,paymentHandler *handler.PaymentHandler) *gin.Engine {
+func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.AuthHandler,adminAuthHandler *handler.AdminAuthHandler,venueHandler *handler.VenueHandler,adminVenueHandler *handler.AdminVenueHandler, bookingHandler *handler.BookingHandler,paymentHandler *handler.PaymentHandler,gqlResolver *graph.Resolver) *gin.Engine {
 	r := gin.Default()
 
 	globalLimiter := handler.RateLimiter(rdb, "global", 25, 1*time.Minute)
@@ -93,5 +96,15 @@ func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.Auth
 		adminRoutes.POST("/venues/drafts/:draft_id/approve", adminVenueHandler.ApproveEditDraft)
 		adminRoutes.POST("/venues/drafts/:draft_id/reject", adminVenueHandler.RejectEditDraft)
 	}
+
+	// GraphQL Admin Dashboard
+	gqlServer := gqlhandler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: gqlResolver}))
+	r.GET("/admin/playground", func(c *gin.Context) {
+		playground.Handler("GraphQL Admin Playground", "/api/admin/graphql").ServeHTTP(c.Writer, c.Request)
+	})
+	r.POST("/api/admin/graphql", func(c *gin.Context) {
+		gqlServer.ServeHTTP(c.Writer, c.Request)
+	})
+
 	return r
 }
