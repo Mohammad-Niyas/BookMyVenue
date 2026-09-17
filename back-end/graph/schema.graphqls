@@ -1,0 +1,66 @@
+# Platform Analytics & Statistics
+
+type DashboardStats {
+  totalVenues: Int!
+  totalBookings: Int!
+  totalRevenue: Float!
+  pendingVenues: Int!
+}
+
+# Admin View Models
+
+type AdminVenue {
+  id: ID!
+  name: String!
+  city: String!
+  status: String!
+  address: String!
+  createdAt: String!
+}
+
+type AdminUser {
+  id: ID!
+  name: String!
+  email: String!
+  role: String!
+  status: String!
+  phone: String
+  businessName: String
+  gstNumber: String
+  createdAt: String!
+}
+
+type AdminBooking {
+  id: ID!
+  userId: ID!
+  spaceId: ID!
+  totalAmount: Float!
+  amountPaid: Float!
+  status: String!
+  createdAt: String!
+}
+
+# Root Queries & Mutations
+
+type Query {
+  # Live Aggregate Platform Analytics
+  dashboardStats: DashboardStats!
+
+  # Venue Oversight (all or filtered by status: 'pending', 'approved', 'rejected')
+  venues(status: String): [AdminVenue!]!
+
+  # User & Owner Governance (filter by role: 'user', 'owner', or null for all)
+  users(role: String): [AdminUser!]!
+
+  # Booking Monitoring
+  bookings(status: String): [AdminBooking!]!
+}
+
+type Mutation {
+  # Venue Approval Actions
+  approveVenue(id: ID!): Boolean!
+  rejectVenue(id: ID!, reason: String!): Boolean!
+
+  # User Moderation (toggles active <-> suspended)
+  suspendUser(id: ID!): Boolean!
+}
