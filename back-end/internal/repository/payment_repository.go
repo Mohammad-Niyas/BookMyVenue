@@ -3,6 +3,7 @@ package repository
 import (
 	"bookmyvenue/internal/domain"
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -71,10 +72,19 @@ func (r *paymentRepository) ConfirmBookingAndCapturePayment(ctx context.Context,
 		if err := tx.Create(auditLog).Error; err != nil {
 			return err
 		}
+		payload := fmt.Sprintf(`{"booking_id":"%s","payment_id":"%s","amount_paid":%.2f}`, bookingID, paymentID, amountPaid)
+		outboxEvent := &domain.OutboxEvent{
+			Topic:   "booking.confirmed",
+			Payload: payload,
+			Status:  "pending",
+		}
+		if err := tx.Create(outboxEvent).Error; err != nil {
+			return err
+		}
 		return nil
 	})
 }
 
-func (r *paymentRepository) CreateAuditLog(audit *domain.PaymentAuditLog) error{
+func (r *paymentRepository) CreateAuditLog(audit *domain.PaymentAuditLog) error {
 	return r.db.Create(audit).Error
 }
