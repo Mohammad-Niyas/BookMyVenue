@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"bookmyvenue/config"
+	"bookmyvenue/graph"
 	"bookmyvenue/internal/domain"
 	"bookmyvenue/internal/handler"
 	"bookmyvenue/internal/repository"
@@ -88,8 +89,14 @@ func main() {
 	bookingHandler    := handler.NewBookingHandler(bookingService)
 	paymentHandler    := handler.NewPaymentHandler(paymentService)
 
-
-	r := router.SetupRouter(cfg,rdb, authHandler,adminAuthHandler,venueHandler,adminVenueHandler,bookingHandler,paymentHandler)
+	
+	// GraphQL
+	gqlResolver := &graph.Resolver{
+		DB:            db,
+		AdminVenueSvc: adminVenueService,
+	}
+	
+	r := router.SetupRouter(cfg, rdb, authHandler, adminAuthHandler, venueHandler, adminVenueHandler, bookingHandler, paymentHandler, gqlResolver)
 
 	port := fmt.Sprintf(":%s", cfg.ServerPort)
 	log.Printf("BookMyVenue server starting on port %s", cfg.ServerPort)
