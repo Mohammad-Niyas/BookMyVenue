@@ -79,6 +79,13 @@ func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.Auth
 		ownerRoutes.POST("/spaces/:id/slots", venueHandler.GenerateSlots)
 	}
 
+	// GraphQL Admin Server Setup
+	gqlServer := gqlhandler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: gqlResolver}))
+	// GraphQL Playground (Public developer GUI - loads in browser)
+	r.GET("/admin/playground", func(c *gin.Context) {
+		playground.Handler("GraphQL Admin Playground", "/api/admin/graphql").ServeHTTP(c.Writer, c.Request)
+	})
+
 	// Protected Admin Routes
 	adminRoutes := r.Group("/api/admin")
 	adminRoutes.Use(handler.AuthMiddleware(cfg))
@@ -95,16 +102,11 @@ func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.Auth
 		adminRoutes.GET("/venues/drafts/pending", adminVenueHandler.GetPendingDrafts)
 		adminRoutes.POST("/venues/drafts/:draft_id/approve", adminVenueHandler.ApproveEditDraft)
 		adminRoutes.POST("/venues/drafts/:draft_id/reject", adminVenueHandler.RejectEditDraft)
+		
+		// Protected GraphQL Endpoint
+		adminRoutes.POST("/graphql", func(c *gin.Context) {
+			gqlServer.ServeHTTP(c.Writer, c.Request)
+		})
 	}
-
-	// GraphQL Admin Dashboard
-	gqlServer := gqlhandler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: gqlResolver}))
-	r.GET("/admin/playground", func(c *gin.Context) {
-		playground.Handler("GraphQL Admin Playground", "/api/admin/graphql").ServeHTTP(c.Writer, c.Request)
-	})
-	r.POST("/api/admin/graphql", func(c *gin.Context) {
-		gqlServer.ServeHTTP(c.Writer, c.Request)
-	})
-
 	return r
 }
