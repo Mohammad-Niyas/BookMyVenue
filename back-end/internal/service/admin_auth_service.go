@@ -39,20 +39,19 @@ func (s *adminAuthService) Login(req LoginRequest) (*AuthResponse, error) {
 		return nil, errors.New("invalid email or password")
 	}
 
-	tokenPair, err := utils.GenerateTokenPair(
+	accessToken, err := utils.GenerateAccessToken(
 		admin.ID,
-		"admin", 
+		"admin",
 		s.cfg.JWTSecret,
 		s.cfg.AccessTokenExpiryMins,
-		s.cfg.RefreshTokenExpiryDays,
 	)
 	if err != nil {
-		return nil, errors.New("failed to generate tokens")
+		return nil, errors.New("failed to generate access token")
 	}
 
 	return &AuthResponse{
-		AccessToken:  tokenPair.AccessToken,
-		RefreshToken: tokenPair.RefreshToken,
+		AccessToken:  accessToken,
+		RefreshToken: "", // Disabled for Admin
 		Role:         "admin",
 	}, nil
 }
