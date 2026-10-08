@@ -109,3 +109,34 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
+func (h *AuthHandler) RefreshToken(c *gin.Context) {
+	var req service.RefreshTokenRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "refresh_token is required"})
+		return
+	}
+
+	response, err := h.authService.RefreshToken(req)
+	if err != nil {
+		if err.Error() == "invalid or expired refresh token" || 
+		   err.Error() == "refresh token revoked or expired" || 
+		   err.Error() == "user not found" || 
+		   err.Error() == "token user mismatch" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			return
+		}
+		if err.Error() == "account is suspended" || err.Error() == "account is banned" {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "token refreshed successfully",
+		"data":    response,
+	})
+}
+

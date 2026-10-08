@@ -74,7 +74,7 @@ func main() {
 	paymentRepo := repository.NewPaymentRepository(db)
 
 	// Services 
-	authService       := service.NewAuthService(userRepo, cfg)
+	authService := service.NewAuthService(userRepo, cfg, rdb)
 	adminAuthService  := service.NewAdminAuthService(adminRepo, cfg)
 	venueService      := service.NewVenueService(venueRepo, spaceRepo, s3Client, rdb)
 	adminVenueService := service.NewAdminVenueService(venueRepo)
