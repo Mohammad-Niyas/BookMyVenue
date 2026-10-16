@@ -10,13 +10,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
 type AuthService interface {
-	RegisterUser(req RegisterRequest) (*AuthResponse, error)
-	RegisterOwner(req OwnerRegisterRequest) (*AuthResponse, error)
+	RegisterUser(req RegisterRequest) (*UserResponse, error)
+    RegisterOwner(req OwnerRegisterRequest) (*UserResponse, error)
 	Login(req LoginRequest) (*AuthResponse, error)
 	RefreshToken(req RefreshTokenRequest) (*AuthResponse, error)
 }
@@ -45,6 +46,12 @@ type AuthResponse struct {
 	RefreshToken string `json:"refresh_token,omitempty"`
 	Role         string `json:"role"`
 }
+type UserResponse struct {
+    ID    uuid.UUID `json:"id"`
+    Name  string    `json:"name"`
+    Email string    `json:"email"`
+    Role  string    `json:"role"`
+}
 type authService struct {
 	userRepo repository.UserRepository
 	cfg      *config.Config
@@ -58,7 +65,7 @@ func NewAuthService(userRepo repository.UserRepository, cfg *config.Config, rdb 
 	}
 }
 
-func (s *authService) RegisterUser(req RegisterRequest) (*AuthResponse, error) {
+func (s *authService) RegisterUser(req RegisterRequest) (*UserResponse, error) {
 	existingUser, err := s.userRepo.FindByEmail(req.Email)
 
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -85,29 +92,15 @@ func (s *authService) RegisterUser(req RegisterRequest) (*AuthResponse, error) {
 		return nil, errors.New("failed to create user")
 	}
 
-	tokenPair, err := utils.GenerateTokenPair(
-		user.ID,
-		user.Role,
-		s.cfg.JWTSecret,
-		s.cfg.AccessTokenExpiryMins,
-		s.cfg.RefreshTokenExpiryDays,
-	)
-	if err != nil {
-		return nil, errors.New("failed to generate tokens")
-	}
-
-	// Persist refresh token in Redis
-	ctx := context.Background()
-	_ = s.storeRefreshToken(ctx, user.ID.String(), tokenPair.RefreshToken)
-
-	return &AuthResponse{
-		AccessToken:  tokenPair.AccessToken,
-		RefreshToken: tokenPair.RefreshToken,
-		Role:         user.Role,
+	return &UserResponse{
+		ID: user.ID,
+		Name: user.Name,
+		Email: user.Email,
+		Role: user.Role,
 	}, nil
 }
 
-func (s *authService) RegisterOwner(req OwnerRegisterRequest) (*AuthResponse, error) {
+func (s *authService) RegisterOwner(req OwnerRegisterRequest) (*UserResponse, error) {
 	existingUser, err := s.userRepo.FindByEmail(req.Email)
 
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -137,25 +130,11 @@ func (s *authService) RegisterOwner(req OwnerRegisterRequest) (*AuthResponse, er
 		return nil, errors.New("failed to create owner")
 	}
 
-	tokenPair, err := utils.GenerateTokenPair(
-		user.ID,
-		user.Role,
-		s.cfg.JWTSecret,
-		s.cfg.AccessTokenExpiryMins,
-		s.cfg.RefreshTokenExpiryDays,
-	)
-	if err != nil {
-		return nil, errors.New("failed to generate tokens")
-	}
-
-	// Persist refresh token in Redis
-	ctx := context.Background()
-	_ = s.storeRefreshToken(ctx, user.ID.String(), tokenPair.RefreshToken)
-
-	return &AuthResponse{
-		AccessToken:  tokenPair.AccessToken,
-		RefreshToken: tokenPair.RefreshToken,
-		Role:         user.Role,
+	return &UserResponse{
+		ID: user.ID,
+		Name: user.Name,
+		Email: user.Email,
+		Role: user.Role,
 	}, nil
 }
 
