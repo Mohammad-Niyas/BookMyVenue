@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -55,27 +56,27 @@ type PaymentService interface {
 	VerifyPayment(ctx context.Context, userID uuid.UUID, req VerifyPaymentRequest) (*VerifyPaymentResponse, error)
 }
 
-type paymentService struct{
+type paymentService struct {
 	paymentRepo repository.PaymentRepository
-	spaceRepo repository.SpaceRepository
-	rdb       *redis.Client
-	db *gorm.DB
-	keyID string
-    keySecret string  
+	spaceRepo   repository.SpaceRepository
+	rdb         *redis.Client
+	db          *gorm.DB
+	keyID       string
+	keySecret   string
 }
 
-func NewPaymentService(paymentRepo repository.PaymentRepository,spaceRepo repository.SpaceRepository,rdb *redis.Client,db *gorm.DB,keyID string,keySecret string)PaymentService{
+func NewPaymentService(paymentRepo repository.PaymentRepository, spaceRepo repository.SpaceRepository, rdb *redis.Client, db *gorm.DB, keyID string, keySecret string) PaymentService {
 	return &paymentService{
 		paymentRepo: paymentRepo,
-		spaceRepo: spaceRepo,
-		db: db,
-		rdb: rdb,
-		keyID: keyID,
-		keySecret: keySecret,
+		spaceRepo:   spaceRepo,
+		db:          db,
+		rdb:         rdb,
+		keyID:       keyID,
+		keySecret:   keySecret,
 	}
 }
 
-func (s *paymentService) CreatePaymentOrder(ctx context.Context, userID uuid.UUID, req CreatePaymentOrderRequest) (*CreatePaymentOrderResponse, error){
+func (s *paymentService) CreatePaymentOrder(ctx context.Context, userID uuid.UUID, req CreatePaymentOrderRequest) (*CreatePaymentOrderResponse, error) {
 	var booking domain.Booking
 	if err := s.db.WithContext(ctx).Where("id = ?", req.BookingID).First(&booking).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -95,9 +96,7 @@ func (s *paymentService) CreatePaymentOrder(ctx context.Context, userID uuid.UUI
 		return nil, errors.New("slot details not found")
 	}
 
-
-
-		// For Installment 1 (Initial booking): Verify 10-minute Redis Hold
+	// For Installment 1 (Initial booking): Verify 10-minute Redis Hold
 	if booking.AmountPaid == 0 {
 		redisKey := "hold:slot:" + booking.SlotID.String()
 		heldUser, err := s.rdb.Get(ctx, redisKey).Result()
@@ -137,7 +136,7 @@ func (s *paymentService) CreatePaymentOrder(ctx context.Context, userID uuid.UUI
 		return nil, errors.New("space details not found")
 	}
 	payableAmount := booking.TotalAmount
-	if space.BookingType == "daily" && space.Capacity > 4 {
+	if space.BookingType == "daily" && booking.TotalAmount >= 10000.00 {
 		if booking.AmountPaid == 0 {
 			payableAmount = booking.TotalAmount * 0.30
 		} else {
@@ -146,7 +145,7 @@ func (s *paymentService) CreatePaymentOrder(ctx context.Context, userID uuid.UUI
 	}
 
 	amountInPaise := int64(payableAmount * 100)
-	
+
 	rzpOrderID := "order_" + uuid.New().String()[:14]
 
 	payment := &domain.Payment{
@@ -157,14 +156,21 @@ func (s *paymentService) CreatePaymentOrder(ctx context.Context, userID uuid.UUI
 	}
 
 	if err := s.paymentRepo.CreateOrder(payment); err != nil {
+		if strings.Contains(err.Error(), "idx_unique_active_payment") || strings.Contains(err.Error(), "duplicate key") {
+			existingPayment, fetchErr := s.paymentRepo.FindByBookingID(booking.ID)
+			if fetchErr == nil && existingPayment != nil {
+				res := mapToPaymentOrderResponse(*existingPayment, amountInPaise, s.keyID)
+				return &res, nil
+			}
+		}
 		return nil, errors.New("failed to save payment order")
 	}
-	
+
 	res := mapToPaymentOrderResponse(*payment, amountInPaise, s.keyID)
 	return &res, nil
 }
 
-func (s *paymentService) VerifyPayment(ctx context.Context, userID uuid.UUID, req VerifyPaymentRequest) (*VerifyPaymentResponse, error){
+func (s *paymentService) VerifyPayment(ctx context.Context, userID uuid.UUID, req VerifyPaymentRequest) (*VerifyPaymentResponse, error) {
 	payment, err := s.paymentRepo.FindByRazorpayOrderID(req.RazorpayOrderID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -211,7 +217,7 @@ func (s *paymentService) VerifyPayment(ctx context.Context, userID uuid.UUID, re
 	); err != nil {
 		return nil, errors.New("failed to confirm booking and capture payment in database")
 	}
-	
+
 	// Delete Redis Temporary Hold
 	s.rdb.Del(ctx, "hold:slot:"+booking.SlotID.String())
 
