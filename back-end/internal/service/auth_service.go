@@ -111,7 +111,7 @@ func (s *authService) RegisterOwner(req OwnerRegisterRequest) (*UserResponse, er
 	}
 
 	hashedPassword, err := utils.HashPassword(req.Password)
-	if err != nil {
+	if err != nil { 	 
 		return nil, errors.New("failed to hash password")
 	}
 
