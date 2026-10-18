@@ -1,15 +1,19 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"bookmyvenue/config"
+	"bookmyvenue/graph"
 	"bookmyvenue/internal/domain"
 	"bookmyvenue/internal/handler"
 	"bookmyvenue/internal/repository"
 	"bookmyvenue/internal/router"
 	"bookmyvenue/internal/service"
+	"bookmyvenue/pkg/rabbitmq"
 	"bookmyvenue/pkg/s3"
 )
 
@@ -42,7 +46,26 @@ func main() {
 		log.Printf("S3 Client not initialized: %v (presigned URLs won't work)", err)
 	}
 
-	// 1. Repositories
+	// RabbitMQ Client & Background Workers
+	rabbitClient, err := rabbitmq.NewRabbitMQ(cfg.RabbitMQURL)
+	if err != nil {
+		log.Printf("[RabbitMQ] WARNING: Could not connect to RabbitMQ: %v (Outbox poller disabled)", err)
+	} else {
+		defer rabbitClient.Close()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		// Outbox Worker
+		outboxService := service.NewOutboxService(db, rabbitClient, 5*time.Second)
+		go outboxService.Start(ctx)
+
+		// Notification Consumer
+		notificationConsumer := service.NewNotificationConsumer(rabbitClient)
+		go notificationConsumer.Start(ctx)
+	}
+
+	// Repositories
 	userRepo    := repository.NewUserRepository(db)
 	adminRepo   := repository.NewAdminRepository(db)
 	venueRepo   := repository.NewVenueRepository(db)
@@ -50,15 +73,15 @@ func main() {
 	bookingRepo := repository.NewBookingRepository(db)
 	paymentRepo := repository.NewPaymentRepository(db)
 
-	// 2. Services (Now spaceRepo, venueRepo, and rdb exist above!)
-	authService       := service.NewAuthService(userRepo, cfg)
+	// Services 
+	authService := service.NewAuthService(userRepo, cfg, rdb)
 	adminAuthService  := service.NewAdminAuthService(adminRepo, cfg)
 	venueService      := service.NewVenueService(venueRepo, spaceRepo, s3Client, rdb)
 	adminVenueService := service.NewAdminVenueService(venueRepo)
 	bookingService    := service.NewBookingService(bookingRepo, spaceRepo, venueRepo, rdb,db)
 	paymentService    := service.NewPaymentService(paymentRepo, spaceRepo, rdb, db, cfg.RazorpayKeyID, cfg.RazorpayKeySecret)
 
-	// 3. Handlers
+	// Handlers
 	authHandler       := handler.NewAuthHandler(authService)
 	adminAuthHandler  := handler.NewAdminAuthHandler(adminAuthService)
 	venueHandler      := handler.NewVenueHandler(venueService)
@@ -66,8 +89,14 @@ func main() {
 	bookingHandler    := handler.NewBookingHandler(bookingService)
 	paymentHandler    := handler.NewPaymentHandler(paymentService)
 
-
-	r := router.SetupRouter(cfg,rdb, authHandler,adminAuthHandler,venueHandler,adminVenueHandler,bookingHandler,paymentHandler)
+	
+	// GraphQL
+	gqlResolver := &graph.Resolver{
+		DB:            db,
+		AdminVenueSvc: adminVenueService,
+	}
+	
+	r := router.SetupRouter(cfg, rdb, authHandler, adminAuthHandler, venueHandler, adminVenueHandler, bookingHandler, paymentHandler, gqlResolver)
 
 	port := fmt.Sprintf(":%s", cfg.ServerPort)
 	log.Printf("BookMyVenue server starting on port %s", cfg.ServerPort)
