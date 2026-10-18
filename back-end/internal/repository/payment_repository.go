@@ -3,6 +3,7 @@ package repository
 import (
 	"bookmyvenue/internal/domain"
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -58,8 +59,19 @@ func (r *paymentRepository) ConfirmBookingAndCapturePayment(ctx context.Context,
 		if err := tx.Model(&domain.Booking{}).Where("id = ?", bookingID).Updates(bookingUpdates).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&domain.Slot{}).Where("id = ?", slotID).Update("is_booked", true).Error; err != nil {
-			return err
+
+		// Atomic Conditional Update: Update ONLY if is_booked is still false
+		slotRes := tx.Model(&domain.Slot{}).
+			Where("id = ? AND is_booked = false", slotID).
+			Update("is_booked", true)
+
+		if slotRes.Error != nil {
+			return slotRes.Error
+		}
+
+		// If RowsAffected is 0, someone already booked this slot while this user was delayed!
+		if slotRes.RowsAffected == 0 {
+			return errors.New("slot_already_booked_conflict")
 		}
 
 		auditLog := &domain.PaymentAuditLog{
@@ -75,6 +87,6 @@ func (r *paymentRepository) ConfirmBookingAndCapturePayment(ctx context.Context,
 	})
 }
 
-func (r *paymentRepository) CreateAuditLog(audit *domain.PaymentAuditLog) error{
+func (r *paymentRepository) CreateAuditLog(audit *domain.PaymentAuditLog) error {
 	return r.db.Create(audit).Error
 }
