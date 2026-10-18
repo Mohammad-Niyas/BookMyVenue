@@ -215,6 +215,9 @@ func (s *paymentService) VerifyPayment(ctx context.Context, userID uuid.UUID, re
 		newAmountPaid,
 		booking.SlotID,
 	); err != nil {
+		if err.Error() == "slot_already_booked_conflict" {
+			return nil, errors.New("slot was already booked by another user due to session timeout: automated refund initiated")
+		}
 		return nil, errors.New("failed to confirm booking and capture payment in database")
 	}
 
