@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -18,7 +20,8 @@ type TokenPair struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-func GenerateTokenPair(userID uuid.UUID, role string, secret string, accessExpiryMins int, refreshExpiryDays int) (*TokenPair, error) {
+// generates ONLY an access token (Used for Admins)
+func GenerateAccessToken(userID uuid.UUID, role string, secret string, accessExpiryMins int) (string, error) {
 	accessClaims := JWTClaims{
 		UserID: userID,
 		Role:   role,
@@ -27,12 +30,16 @@ func GenerateTokenPair(userID uuid.UUID, role string, secret string, accessExpir
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
-	accessTokenObj := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
-	accessToken, err := accessTokenObj.SignedString([]byte(secret))
+	tokenObj := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
+	return tokenObj.SignedString([]byte(secret))
+}
+
+// generates both Access and Refresh tokens (Used for Users & Owners)
+func GenerateTokenPair(userID uuid.UUID, role string, secret string, accessExpiryMins int, refreshExpiryDays int) (*TokenPair, error) {
+	accessToken, err := GenerateAccessToken(userID, role, secret, accessExpiryMins)
 	if err != nil {
 		return nil, err
 	}
-
 	refreshClaims := JWTClaims{
 		UserID: userID,
 		Role:   role,
@@ -46,7 +53,6 @@ func GenerateTokenPair(userID uuid.UUID, role string, secret string, accessExpir
 	if err != nil {
 		return nil, err
 	}
-
 	return &TokenPair{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
@@ -67,4 +73,10 @@ func ValidateToken(tokenStr string, secret string) (*JWTClaims, error) {
 	}
 
 	return nil, jwt.ErrSignatureInvalid
+}
+
+// computes a SHA-256 hash of a token string for safe storage in Redis
+func HashToken(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:])
 }

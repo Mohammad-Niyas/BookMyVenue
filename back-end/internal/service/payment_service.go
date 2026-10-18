@@ -143,7 +143,6 @@ func (s *paymentService) CreatePaymentOrder(ctx context.Context, userID uuid.UUI
 			payableAmount = booking.TotalAmount - booking.AmountPaid
 		}
 	}
-
 	amountInPaise := int64(payableAmount * 100)
 
 	rzpOrderID := "order_" + uuid.New().String()[:14]
@@ -220,8 +219,7 @@ func (s *paymentService) VerifyPayment(ctx context.Context, userID uuid.UUID, re
 		}
 		return nil, errors.New("failed to confirm booking and capture payment in database")
 	}
-
-	// Delete Redis Temporary Hold
+// Delete Redis Temporary Hold
 	s.rdb.Del(ctx, "hold:slot:"+booking.SlotID.String())
 
 	return &VerifyPaymentResponse{
