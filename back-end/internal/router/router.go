@@ -38,6 +38,7 @@ func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.Auth
 		auth.POST("/register/owner", registerLimiter, authHandler.RegisterOwner)
 		auth.POST("/login", loginLimiter, authHandler.Login)
 		auth.POST("/refresh", authHandler.RefreshToken)
+		auth.POST("/logout", authHandler.Logout)
 	}
 
 	// Public Auth Routes (Admin)

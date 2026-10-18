@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,6 +21,7 @@ type AuthService interface {
     RegisterOwner(req OwnerRegisterRequest) (*UserResponse, error)
 	Login(req LoginRequest) (*AuthResponse, error)
 	RefreshToken(req RefreshTokenRequest) (*AuthResponse, error)
+	Logout(refreshToken string) error
 }
 type RegisterRequest struct {
 	Name     string `json:"name"`
@@ -234,4 +236,20 @@ func (s *authService) storeRefreshToken(ctx context.Context, userID string, refr
 	tokenHash := utils.HashToken(refreshToken)
 	ttl := time.Duration(s.cfg.RefreshTokenExpiryDays) * 24 * time.Hour
 	return s.rdb.Set(ctx, fmt.Sprintf("refresh:%s", tokenHash), userID, ttl).Err()
+}
+
+func (s *authService) Logout(refreshToken string) error {
+	if strings.TrimSpace(refreshToken) == "" {
+		return errors.New("refresh_token is required")
+	}
+
+	ctx := context.Background()
+	tokenHash := utils.HashToken(refreshToken)
+	redisKey := fmt.Sprintf("refresh:%s", tokenHash)
+	
+	if err := s.rdb.Del(ctx, redisKey).Err(); err != nil {
+		return errors.New("failed to revoke session from store")
+	}
+
+	return nil
 }
