@@ -5,6 +5,7 @@ import (
 	"bookmyvenue/internal/repository"
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,8 +27,22 @@ type BookingResponse struct {
 	Status      string    `json:"status"`
 }
 
+type CancelBookingRequest struct {
+	Reason string `json:"reason" binding:"required,min=5,max=255"`
+}
+
+type CancelBookingResponse struct {
+	BookingID          uuid.UUID `json:"booking_id"`
+	Status             string    `json:"status"`
+	RefundAmount       float64   `json:"refund_amount"`
+	RefundPercentage   float64   `json:"refund_percentage"`
+	CancellationReason string    `json:"cancellation_reason"`
+	CancelledAt        time.Time `json:"cancelled_at"`
+}
+
 type BookingService interface {
 	CreateBooking(ctx context.Context, userID uuid.UUID, req BookingRequest) (*BookingResponse, error)
+	CancelBooking(ctx context.Context, userID uuid.UUID, bookingID uuid.UUID, req CancelBookingRequest) (*CancelBookingResponse, error)
 }
 
 type bookingService struct {
@@ -128,4 +143,121 @@ func mapToBookingResponse(b domain.Booking) BookingResponse {
 		TotalAmount: b.TotalAmount,
 		Status:      b.Status,
 	}
+}
+
+func (s *bookingService) CancelBooking(ctx context.Context, userID uuid.UUID, bookingID uuid.UUID, req CancelBookingRequest) (*CancelBookingResponse, error) {
+	// 1. Fetch Booking Record
+	booking, err := s.bookingRepo.FindByID(ctx, bookingID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("booking not found")
+		}
+		return nil, errors.New("failed to fetch booking details")
+	}
+
+	// 2. IDOR Guard: Verify ownership
+	if booking.UserID != userID {
+		return nil, errors.New("unauthorized: you do not own this booking")
+	}
+
+	// 3. State Guard: Prevent double-cancellation
+	if booking.Status == "cancelled" {
+		return nil, errors.New("booking is already cancelled")
+	}
+	if booking.Status != "confirmed" && booking.Status != "pending" {
+		return nil, fmt.Errorf("cannot cancel booking with status '%s'", booking.Status)
+	}
+
+	// 4. Handle Pending Booking (Release Redis hold, no money involved)
+	if booking.Status == "pending" {
+		s.rdb.Del(ctx, "hold:slot:"+booking.SlotID.String())
+		now := time.Now()
+		if err := s.bookingRepo.CancelBookingTx(ctx, booking.ID, req.Reason, "user", booking.SlotID, nil); err != nil {
+			return nil, errors.New("failed to cancel pending booking")
+		}
+		return &CancelBookingResponse{
+			BookingID:          booking.ID,
+			Status:             "cancelled",
+			RefundAmount:       0.0,
+			RefundPercentage:   0.0,
+			CancellationReason: req.Reason,
+			CancelledAt:        now,
+		}, nil
+	}
+
+	// 5. Confirmed Booking: Fetch Space, Slot, and CancellationPolicy
+	space, err := s.spaceRepo.FindBySpaceID(booking.SpaceID)
+	if err != nil {
+		return nil, errors.New("space details not found")
+	}
+	slot, err := s.spaceRepo.FindBySlotID(booking.SlotID)
+	if err != nil {
+		return nil, errors.New("slot details not found")
+	}
+	policy, err := s.venueRepo.FindCancellationPolicyByVenueID(space.VenueID)
+	if err != nil {
+		return nil, errors.New("cancellation policy not found for this venue")
+	}
+
+	// 6. Policy Calculation Engine
+	now := time.Now()
+	refundPercentage := 0.0
+
+	if space.BookingType == "daily" {
+		// Daily spaces: calculated in days
+		daysRemaining := int(slot.Date.Sub(now.Truncate(24 * time.Hour)).Hours() / 24)
+		if daysRemaining < 0 {
+			return nil, errors.New("cannot cancel a booking for a past date")
+		}
+		if daysRemaining >= policy.FullRefundDays {
+			refundPercentage = policy.FullRefundPercent
+		} else if daysRemaining >= policy.PartialRefundDays {
+			refundPercentage = policy.PartialRefundPercent
+		}
+	} else {
+		// Hourly spaces: calculated in hours
+		slotDateTime := slot.Date
+		if slot.StartTime != nil {
+			if parsedTime, err := time.Parse("15:04", *slot.StartTime); err == nil {
+				slotDateTime = time.Date(slot.Date.Year(), slot.Date.Month(), slot.Date.Day(),
+					parsedTime.Hour(), parsedTime.Minute(), 0, 0, slot.Date.Location())
+			}
+		}
+		hoursRemaining := slotDateTime.Sub(now).Hours()
+		if hoursRemaining <= 0 {
+			return nil, errors.New("cannot cancel an ongoing or past slot")
+		}
+		if hoursRemaining >= float64(policy.FullRefundHours) {
+			refundPercentage = policy.FullRefundPercent
+		} else if hoursRemaining >= float64(policy.PartialRefundHours) {
+			refundPercentage = policy.PartialRefundPercent
+		}
+	}
+
+	// 7. Calculate Refund Amount strictly on AmountPaid
+	refundAmount := booking.AmountPaid * (refundPercentage / 100.0)
+
+	var refundRecord *domain.Refund
+	if refundAmount > 0 {
+		refundRecord = &domain.Refund{
+			BookingID: booking.ID,
+			Amount:    refundAmount,
+			Status:    "pending",
+			Reason:    req.Reason,
+		}
+	}
+
+	// 8. Execute Atomic Cancellation Transaction
+	if err := s.bookingRepo.CancelBookingTx(ctx, booking.ID, req.Reason, "user", booking.SlotID, refundRecord); err != nil {
+		return nil, errors.New("failed to cancel booking in database")
+	}
+
+	return &CancelBookingResponse{
+		BookingID:          booking.ID,
+		Status:             "cancelled",
+		RefundAmount:       refundAmount,
+		RefundPercentage:   refundPercentage,
+		CancellationReason: req.Reason,
+		CancelledAt:        now,
+	}, nil
 }

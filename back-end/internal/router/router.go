@@ -53,6 +53,7 @@ func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.Auth
 	userRoutes.Use(handler.RoleMiddleware("user"))
 	{
 		userRoutes.POST("/bookings",globalLimiter,bookingHandler.CreateBooking)
+		userRoutes.POST("/bookings/:id/cancel", globalLimiter, bookingHandler.CancelBooking)
 
 		// Payment Endpoints
 		userRoutes.POST("/payments/order", globalLimiter, paymentHandler.CreatePaymentOrder)
