@@ -41,19 +41,21 @@ func NewVenueRepository(db *gorm.DB) VenueRepository {
 // venue
 
 func (r *venueRepository) Create(venue *domain.Venue) error {
-    return r.db.Transaction(func(tx *gorm.DB) error {
-        if err := tx.Create(venue).Error; err != nil {
-            return err
-        }
-        policy := &domain.CancellationPolicy{
-            VenueID:              venue.ID,
-            FullRefundDays:       15,
-            FullRefundPercent:    95.00,
-            PartialRefundDays:    7,
-            PartialRefundPercent: 50.00,
-        }
-        return tx.Create(policy).Error
-    })
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(venue).Error; err != nil {
+			return err
+		}
+		policy := &domain.CancellationPolicy{
+			VenueID:              venue.ID,
+			FullRefundDays:       15,
+			FullRefundPercent:    95.00,
+			PartialRefundDays:    7,
+			PartialRefundPercent: 50.00,
+			FullRefundHours:      24,
+			PartialRefundHours:   4,
+		}
+		return tx.Create(policy).Error
+	})
 }
 
 func (r *venueRepository) FindByID(id uuid.UUID) (*domain.Venue, error) {
@@ -78,11 +80,11 @@ func (r *venueRepository) FindByOwnerID(ownerID uuid.UUID) ([]domain.Venue, erro
 }
 
 func (r *venueRepository) ExistsByNameAndAddress(ownerID uuid.UUID, name string, address string) (bool, error) {
-    var count int64
-    err := r.db.Model(&domain.Venue{}).
-        Where("owner_id = ? AND name = ? AND address = ?", ownerID, name, address).
-        Count(&count).Error
-    return count > 0, err
+	var count int64
+	err := r.db.Model(&domain.Venue{}).
+		Where("owner_id = ? AND name = ? AND address = ?", ownerID, name, address).
+		Count(&count).Error
+	return count > 0, err
 }
 
 func (r *venueRepository) Update(venue *domain.Venue) error {
@@ -192,7 +194,7 @@ func (r *venueRepository) ApproveDraftAndMerge(venue *domain.Venue, draft *domai
 	})
 }
 
-func (r *venueRepository) Search(city string, venueType string, query string, minPrice, maxPrice float64, minCapacity int,bookingType string, limit, offset int) ([]domain.Venue, int64, error) {
+func (r *venueRepository) Search(city string, venueType string, query string, minPrice, maxPrice float64, minCapacity int, bookingType string, limit, offset int) ([]domain.Venue, int64, error) {
 	var venues []domain.Venue
 	var count int64
 
@@ -232,4 +234,3 @@ func (r *venueRepository) Search(city string, venueType string, query string, mi
 	err := db.Limit(limit).Offset(offset).Order("created_at DESC").Find(&venues).Error
 	return venues, count, err
 }
-
