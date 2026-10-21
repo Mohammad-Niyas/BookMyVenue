@@ -93,3 +93,50 @@ func (h *BookingHandler) CreateBooking(c *gin.Context){
 		"data":booking,
 	})
 }
+
+func (h *BookingHandler) CancelBooking(c *gin.Context) {
+	userID, err := getUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid user ID from token"})
+		return
+	}
+
+	bookingIDStr := c.Param("id")
+	bookingID, err := uuid.Parse(bookingIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid booking ID format: must be a valid UUID"})
+		return
+	}
+
+	var req service.CancelBookingRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	res, err := h.BookingService.CancelBooking(ctx, userID, bookingID, req)
+	if err != nil {
+		if err.Error() == "booking not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		if err.Error() == "unauthorized: you do not own this booking" {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		if err.Error() == "booking is already cancelled" {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Booking cancelled successfully",
+		"data":    res,
+	})
+}

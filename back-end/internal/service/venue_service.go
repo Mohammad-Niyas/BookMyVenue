@@ -52,6 +52,8 @@ type CancellationPolicyResponse struct {
 	FullRefundPercent    float64   `json:"full_refund_percent"`
 	PartialRefundDays    int       `json:"partial_refund_days"`
 	PartialRefundPercent float64   `json:"partial_refund_percent"`
+	FullRefundHours      int       `json:"full_refund_hours"`
+	PartialRefundHours   int       `json:"partial_refund_hours"`
 }
 type SpaceResponse struct {
 	ID          uuid.UUID `json:"id"`
@@ -176,6 +178,8 @@ func mapToCancellationPolicyResponse(p *domain.CancellationPolicy) *Cancellation
 		FullRefundPercent:    p.FullRefundPercent,
 		PartialRefundDays:    p.PartialRefundDays,
 		PartialRefundPercent: p.PartialRefundPercent,
+		FullRefundHours:      p.FullRefundHours,
+		PartialRefundHours:   p.PartialRefundHours,
 	}
 }
 func mapToVenueResponse(v *domain.Venue) *VenueResponse {
