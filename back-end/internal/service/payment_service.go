@@ -194,12 +194,13 @@ func (s *paymentService) VerifyPayment(ctx context.Context, userID uuid.UUID, re
 		return nil, errors.New("unauthorized: you do not own this booking")
 	}
 
-	// Cryptographic Signature Verification (HMAC-SHA256)
+		// Cryptographic Signature Verification (HMAC-SHA256 with Constant-Time Comparison)
 	data := req.RazorpayOrderID + "|" + req.RazorpayPaymentID
 	h := hmac.New(sha256.New, []byte(s.keySecret))
 	h.Write([]byte(data))
 	expectedSignature := hex.EncodeToString(h.Sum(nil))
-	if req.RazorpaySignature != expectedSignature && req.RazorpaySignature != "test_signature" {
+
+	if !hmac.Equal([]byte(req.RazorpaySignature), []byte(expectedSignature)) {
 		return nil, errors.New("invalid payment signature: payment verification failed")
 	}
 

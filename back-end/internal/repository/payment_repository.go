@@ -61,9 +61,9 @@ func (r *paymentRepository) ConfirmBookingAndCapturePayment(ctx context.Context,
 			return err
 		}
 
-		// Atomic Conditional Update: Update ONLY if is_booked is still false
+		// Atomic Conditional Update: Update if slot is unbooked OR already reserved by this booking
 		slotRes := tx.Model(&domain.Slot{}).
-			Where("id = ? AND is_booked = false", slotID).
+			Where("id = ? AND (is_booked = false OR booking_id = ?)", slotID, bookingID).
 			Update("is_booked", true)
 
 		if slotRes.Error != nil {
