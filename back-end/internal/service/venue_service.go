@@ -729,15 +729,15 @@ func (s *venueService) GenerateSlots(ownerID uuid.UUID, spaceID uuid.UUID, req G
 		duration := et.Sub(st)
 
 		// Domain Invariant: Hourly spaces require 30m <= duration <= 4h
-		if space.BookingType == "hourly" {
+		switch space.BookingType {
+		case "hourly":
 			if duration < 30*time.Minute {
 				return nil, fmt.Errorf("slot %s-%s duration must be at least 30 minutes for hourly spaces", sl.StartTime, sl.EndTime)
 			}
 			if duration > 4*time.Hour {
 				return nil, fmt.Errorf("slot %s-%s duration cannot exceed 4 hours for hourly spaces", sl.StartTime, sl.EndTime)
 			}
-		} else if space.BookingType == "daily" {
-			// Domain Invariant: Daily spaces must span at least 6 hours (e.g. morning to evening)
+		case "daily":
 			if duration < 6*time.Hour {
 				return nil, fmt.Errorf("slot %s-%s duration must be at least 6 hours for daily spaces", sl.StartTime, sl.EndTime)
 			}
