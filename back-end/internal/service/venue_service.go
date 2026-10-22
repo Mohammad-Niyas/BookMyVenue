@@ -722,6 +722,26 @@ func (s *venueService) GenerateSlots(ownerID uuid.UUID, spaceID uuid.UUID, req G
 		if sl.StartTime >= sl.EndTime {
 			return nil, fmt.Errorf("slot start time %s must be earlier than end time %s", sl.StartTime, sl.EndTime)
 		}
+
+		// Parse times to calculate slot duration
+		st, _ := time.Parse("15:04", sl.StartTime)
+		et, _ := time.Parse("15:04", sl.EndTime)
+		duration := et.Sub(st)
+
+		// Domain Invariant: Hourly spaces require 30m <= duration <= 4h
+		if space.BookingType == "hourly" {
+			if duration < 30*time.Minute {
+				return nil, fmt.Errorf("slot %s-%s duration must be at least 30 minutes for hourly spaces", sl.StartTime, sl.EndTime)
+			}
+			if duration > 4*time.Hour {
+				return nil, fmt.Errorf("slot %s-%s duration cannot exceed 4 hours for hourly spaces", sl.StartTime, sl.EndTime)
+			}
+		} else if space.BookingType == "daily" {
+			// Domain Invariant: Daily spaces must span at least 6 hours (e.g. morning to evening)
+			if duration < 6*time.Hour {
+				return nil, fmt.Errorf("slot %s-%s duration must be at least 6 hours for daily spaces", sl.StartTime, sl.EndTime)
+			}
+		}
 	}
 	sort.Slice(req.Slots, func(i, j int) bool {
 		return req.Slots[i].StartTime < req.Slots[j].StartTime
