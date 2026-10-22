@@ -194,7 +194,7 @@ func (s *paymentService) VerifyPayment(ctx context.Context, userID uuid.UUID, re
 		return nil, errors.New("unauthorized: you do not own this booking")
 	}
 
-		// Cryptographic Signature Verification (HMAC-SHA256 with Constant-Time Comparison)
+	// Cryptographic Signature Verification (HMAC-SHA256 with Constant-Time Comparison)
 	data := req.RazorpayOrderID + "|" + req.RazorpayPaymentID
 	h := hmac.New(sha256.New, []byte(s.keySecret))
 	h.Write([]byte(data))
@@ -220,8 +220,10 @@ func (s *paymentService) VerifyPayment(ctx context.Context, userID uuid.UUID, re
 		}
 		return nil, errors.New("failed to confirm booking and capture payment in database")
 	}
-// Delete Redis Temporary Hold
-	s.rdb.Del(ctx, "hold:slot:"+booking.SlotID.String())
+	
+	// Safely release Redis temporary hold only if it still belongs to this user
+	redisKey := "hold:slot:" + booking.SlotID.String()
+	_ = releaseLockScript.Run(ctx, s.rdb, []string{redisKey}, userID.String()).Err()
 
 	return &VerifyPaymentResponse{
 		BookingID:     booking.ID,
