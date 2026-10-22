@@ -18,6 +18,7 @@ import (
 
 type CreatePaymentOrderRequest struct {
 	BookingID uuid.UUID `json:"booking_id" binding:"required"`
+	PayInFull bool      `json:"pay_in_full"` // true: 100% upfront, false/omitted: 30% advance split
 }
 type CreatePaymentOrderResponse struct {
 	PaymentID       uuid.UUID `json:"payment_id"`
@@ -138,8 +139,12 @@ func (s *paymentService) CreatePaymentOrder(ctx context.Context, userID uuid.UUI
 	payableAmount := booking.TotalAmount
 	if space.BookingType == "daily" && booking.TotalAmount >= 10000.00 {
 		if booking.AmountPaid == 0 {
-			payableAmount = booking.TotalAmount * 0.30
+			// If customer does NOT opt to pay in full, charge the standard 30% advance
+			if !req.PayInFull {
+				payableAmount = booking.TotalAmount * 0.30
+			}
 		} else {
+			// Second installment: settle whatever balance remains
 			payableAmount = booking.TotalAmount - booking.AmountPaid
 		}
 	}
@@ -220,7 +225,7 @@ func (s *paymentService) VerifyPayment(ctx context.Context, userID uuid.UUID, re
 		}
 		return nil, errors.New("failed to confirm booking and capture payment in database")
 	}
-	
+
 	// Safely release Redis temporary hold only if it still belongs to this user
 	redisKey := "hold:slot:" + booking.SlotID.String()
 	_ = releaseLockScript.Run(ctx, s.rdb, []string{redisKey}, userID.String()).Err()
