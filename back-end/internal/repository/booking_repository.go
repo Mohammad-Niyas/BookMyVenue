@@ -16,7 +16,7 @@ type BookingRepository interface {
 	CancelBookingTx(ctx context.Context, bookingID uuid.UUID, reason string, cancelledBy string, slotID uuid.UUID, refund *domain.Refund) error
 }
 
-type bookingRepository struct{
+type bookingRepository struct {
 	db *gorm.DB
 }
 
@@ -24,9 +24,9 @@ func NewBookingRepository(db *gorm.DB) BookingRepository {
 	return &bookingRepository{db: db}
 }
 
-func (r *bookingRepository)  Create(ctx context.Context,tx *gorm.DB, booking *domain.Booking) error{
+func (r *bookingRepository) Create(ctx context.Context, tx *gorm.DB, booking *domain.Booking) error {
 	if tx != nil {
-    	return tx.WithContext(ctx).Create(booking).Error
+		return tx.WithContext(ctx).Create(booking).Error
 	}
 	return r.db.WithContext(ctx).Create(booking).Error
 }
@@ -69,7 +69,32 @@ func (r *bookingRepository) CancelBookingTx(ctx context.Context, bookingID uuid.
 				return err
 			}
 		}
-		// 4. Create Outbox Event for async notification (RabbitMQ)
+		// 4. Create Financial Audit Log (Tracks refund & platform retained fee)
+		var payment domain.Payment
+		if err := tx.Where("booking_id = ? AND status = 'captured'", bookingID).Order("created_at desc").First(&payment).Error; err == nil {
+			toStatus := "refunded"
+			retainedFee := payment.Amount - refundAmount
+			if retainedFee > 0 {
+				toStatus = "partially_refunded"
+			}
+			if retainedFee < 0 {
+				retainedFee = 0
+			}
+
+			auditLog := &domain.PaymentAuditLog{
+				PaymentID:  payment.ID,
+				FromStatus: "captured",
+				ToStatus:   toStatus,
+				Metadata: fmt.Sprintf(
+					"booking cancelled by %s. refund: ₹%.2f, platform retained fee: ₹%.2f, reason: %s",
+					cancelledBy, refundAmount, retainedFee, reason,
+				),
+			}
+			if err := tx.Create(auditLog).Error; err != nil {
+				return err
+			}
+		}
+		// 5. Create Outbox Event for async notification (RabbitMQ)
 		payload := fmt.Sprintf(`{"booking_id":"%s","refund_amount":%.2f,"cancelled_by":"%s"}`, bookingID, refundAmount, cancelledBy)
 		outboxEvent := &domain.OutboxEvent{
 			Topic:   "booking.cancelled",
@@ -79,6 +104,3 @@ func (r *bookingRepository) CancelBookingTx(ctx context.Context, bookingID uuid.
 		return tx.Create(outboxEvent).Error
 	})
 }
-
-
-
