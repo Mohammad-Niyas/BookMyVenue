@@ -13,6 +13,16 @@ import (
 	"gorm.io/gorm"
 )
 
+// releaseLockScript ensures atomic release of a distributed lock:
+// It checks whether the key's value matches the given userID before deleting.
+var releaseLockScript = redis.NewScript(`
+	if redis.call("get", KEYS[1]) == ARGV[1] then
+		return redis.call("del", KEYS[1])
+	else
+		return 0
+	end
+`)
+
 type BookingRequest struct {
 	SpaceID uuid.UUID `json:"space_id" binding:"required"`
 	SlotID  uuid.UUID `json:"slot_id" binding:"required"`
@@ -126,7 +136,8 @@ func (s *bookingService) CreateBooking(ctx context.Context, userID uuid.UUID, re
 	})
 
 	if err != nil {
-		s.rdb.Del(ctx, redisKey)
+		// Atomic safe release: only delete if the lock still belongs to this user
+		_ = releaseLockScript.Run(ctx, s.rdb, []string{redisKey}, userID.String()).Err()
 		return nil, errors.New("failed to create booking record")
 	}
 
@@ -205,7 +216,7 @@ func (s *bookingService) CancelBooking(ctx context.Context, userID uuid.UUID, bo
 
 	if space.BookingType == "daily" {
 		// Daily spaces: calculated in days
-		daysRemaining := int(slot.Date.Sub(now.Truncate(24 * time.Hour)).Hours() / 24)
+		daysRemaining := int(slot.Date.Sub(now.Truncate(24*time.Hour)).Hours() / 24)
 		if daysRemaining < 0 {
 			return nil, errors.New("cannot cancel a booking for a past date")
 		}
