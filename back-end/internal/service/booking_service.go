@@ -37,6 +37,31 @@ type BookingResponse struct {
 	Status      string    `json:"status"`
 }
 
+type BookingDetailResponse struct {
+	ID                 uuid.UUID  `json:"id"`
+	Status             string     `json:"status"`
+	TotalAmount        float64    `json:"total_amount"`
+	AmountPaid         float64    `json:"amount_paid"`
+	VenueName          string     `json:"venue_name"`
+	VenueCity          string     `json:"venue_city"`
+	VenueAddress       string     `json:"venue_address"`
+	SpaceName          string     `json:"space_name"`
+	BookingType        string     `json:"booking_type"`
+	SlotDate           string     `json:"slot_date"`
+	StartTime          *string    `json:"start_time,omitempty"`
+	EndTime            *string    `json:"end_time,omitempty"`
+	CancellationReason *string    `json:"cancellation_reason,omitempty"`
+	CancelledAt        *time.Time `json:"cancelled_at,omitempty"`
+	CreatedAt          time.Time  `json:"created_at"`
+}
+
+type UserBookingsListResponse struct {
+	Bookings []BookingDetailResponse `json:"bookings"`
+	Total    int64                   `json:"total"`
+	Page     int                     `json:"page"`
+	Limit    int                     `json:"limit"`
+}
+
 type CancelBookingRequest struct {
 	Reason string `json:"reason" binding:"required,min=5,max=255"`
 }
@@ -53,6 +78,8 @@ type CancelBookingResponse struct {
 type BookingService interface {
 	CreateBooking(ctx context.Context, userID uuid.UUID, req BookingRequest) (*BookingResponse, error)
 	CancelBooking(ctx context.Context, userID uuid.UUID, bookingID uuid.UUID, req CancelBookingRequest) (*CancelBookingResponse, error)
+	ListUserBookings(ctx context.Context, userID uuid.UUID, page int, limit int, status string) (*UserBookingsListResponse, error)
+	GetUserBookingByID(ctx context.Context, userID uuid.UUID, bookingID uuid.UUID) (*BookingDetailResponse, error)
 }
 
 type bookingService struct {
@@ -271,4 +298,81 @@ func (s *bookingService) CancelBooking(ctx context.Context, userID uuid.UUID, bo
 		CancellationReason: req.Reason,
 		CancelledAt:        now,
 	}, nil
+}
+
+func mapToBookingDetailResponse(b domain.Booking) BookingDetailResponse {
+	slotDate := ""
+	var startTime, endTime *string
+	if b.Slot.ID != uuid.Nil {
+		slotDate = b.Slot.Date.Format("2006-01-02")
+		startTime = b.Slot.StartTime
+		endTime = b.Slot.EndTime
+	}
+
+	venueName := ""
+	venueCity := ""
+	venueAddress := ""
+	if b.Space.Venue.ID != uuid.Nil {
+		venueName = b.Space.Venue.Name
+		venueCity = b.Space.Venue.City
+		venueAddress = b.Space.Venue.Address
+	}
+
+	return BookingDetailResponse{
+		ID:                 b.ID,
+		Status:             b.Status,
+		TotalAmount:        b.TotalAmount,
+		AmountPaid:         b.AmountPaid,
+		VenueName:          venueName,
+		VenueCity:          venueCity,
+		VenueAddress:       venueAddress,
+		SpaceName:          b.Space.Name,
+		BookingType:        b.Space.BookingType,
+		SlotDate:           slotDate,
+		StartTime:          startTime,
+		EndTime:            endTime,
+		CancellationReason: b.CancellationReason,
+		CancelledAt:        b.CancelledAt,
+		CreatedAt:          b.CreatedAt,
+	}
+}
+
+func (s *bookingService) ListUserBookings(ctx context.Context, userID uuid.UUID, page int, limit int, status string) (*UserBookingsListResponse, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 50 {
+		limit = 10
+	}
+	offset := (page - 1) * limit
+
+	bookings, total, err := s.bookingRepo.FindByUserID(ctx, userID, status, limit, offset)
+	if err != nil {
+		return nil, errors.New("failed to fetch user bookings")
+	}
+
+	responses := make([]BookingDetailResponse, len(bookings))
+	for i, b := range bookings {
+		responses[i] = mapToBookingDetailResponse(b)
+	}
+
+	return &UserBookingsListResponse{
+		Bookings: responses,
+		Total:    total,
+		Page:     page,
+		Limit:    limit,
+	}, nil
+}
+
+func (s *bookingService) GetUserBookingByID(ctx context.Context, userID uuid.UUID, bookingID uuid.UUID) (*BookingDetailResponse, error) {
+	booking, err := s.bookingRepo.FindUserBookingByID(ctx, bookingID, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("booking not found")
+		}
+		return nil, errors.New("failed to fetch booking details")
+	}
+
+	res := mapToBookingDetailResponse(*booking)
+	return &res, nil
 }

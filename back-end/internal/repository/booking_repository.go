@@ -14,6 +14,8 @@ type BookingRepository interface {
 	Create(ctx context.Context, tx *gorm.DB, booking *domain.Booking) error
 	FindByID(ctx context.Context, id uuid.UUID) (*domain.Booking, error)
 	CancelBookingTx(ctx context.Context, bookingID uuid.UUID, reason string, cancelledBy string, slotID uuid.UUID, refund *domain.Refund) error
+	FindByUserID(ctx context.Context, userID uuid.UUID, status string, limit int, offset int) ([]domain.Booking, int64, error)
+	FindUserBookingByID(ctx context.Context, bookingID uuid.UUID, userID uuid.UUID) (*domain.Booking, error)
 }
 
 type bookingRepository struct {
@@ -103,4 +105,46 @@ func (r *bookingRepository) CancelBookingTx(ctx context.Context, bookingID uuid.
 		}
 		return tx.Create(outboxEvent).Error
 	})
+}
+
+func (r *bookingRepository) FindByUserID(ctx context.Context, userID uuid.UUID, status string, limit int, offset int) ([]domain.Booking, int64, error) {
+	var bookings []domain.Booking
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&domain.Booking{}).Where("user_id = ?", userID)
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	err := query.Preload("Space").
+		Preload("Space.Venue").
+		Preload("Slot").
+		Order("created_at desc").
+		Limit(limit).
+		Offset(offset).
+		Find(&bookings).Error
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return bookings, total, nil
+}
+
+func (r *bookingRepository) FindUserBookingByID(ctx context.Context, bookingID uuid.UUID, userID uuid.UUID) (*domain.Booking, error) {
+	var booking domain.Booking
+	err := r.db.WithContext(ctx).
+		Preload("Space").
+		Preload("Space.Venue").
+		Preload("Slot").
+		Where("id = ? AND user_id = ?", bookingID, userID).
+		First(&booking).Error
+	if err != nil {
+		return nil, err
+	}
+	return &booking, nil
 }

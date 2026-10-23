@@ -5,14 +5,14 @@ import (
 	"bookmyvenue/graph"
 	"bookmyvenue/internal/handler"
 	"time"
-	
+
 	gqlhandler "github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 )
 
-func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.AuthHandler,adminAuthHandler *handler.AdminAuthHandler,venueHandler *handler.VenueHandler,adminVenueHandler *handler.AdminVenueHandler, bookingHandler *handler.BookingHandler,paymentHandler *handler.PaymentHandler,gqlResolver *graph.Resolver) *gin.Engine {
+func SetupRouter(cfg *config.Config, rdb *redis.Client, authHandler *handler.AuthHandler, adminAuthHandler *handler.AdminAuthHandler, venueHandler *handler.VenueHandler, adminVenueHandler *handler.AdminVenueHandler, bookingHandler *handler.BookingHandler, paymentHandler *handler.PaymentHandler, gqlResolver *graph.Resolver) *gin.Engine {
 	r := gin.Default()
 
 	globalLimiter := handler.RateLimiter(rdb, "global", 25, 1*time.Minute)
@@ -31,7 +31,7 @@ func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.Auth
 		publicVenues.GET("/spaces/:id/slots", venueHandler.GetAvailableSlots)
 	}
 
-    // Public Auth Routes (User/Owner)
+	// Public Auth Routes (User/Owner)
 	auth := r.Group("/api/auth")
 	{
 		auth.POST("/register/user", registerLimiter, authHandler.RegisterUser)
@@ -52,8 +52,12 @@ func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.Auth
 	userRoutes.Use(handler.AuthMiddleware(cfg))
 	userRoutes.Use(handler.RoleMiddleware("user"))
 	{
-		userRoutes.POST("/bookings",globalLimiter,bookingHandler.CreateBooking)
+		userRoutes.POST("/bookings", globalLimiter, bookingHandler.CreateBooking)
 		userRoutes.POST("/bookings/:id/cancel", globalLimiter, bookingHandler.CancelBooking)
+
+		// User Booking History Routes
+		userRoutes.GET("/bookings", globalLimiter, bookingHandler.ListUserBookings)
+		userRoutes.GET("/bookings/:id", globalLimiter, bookingHandler.GetUserBookingByID)
 
 		// Payment Endpoints
 		userRoutes.POST("/payments/order", globalLimiter, paymentHandler.CreatePaymentOrder)
@@ -68,13 +72,13 @@ func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.Auth
 		// S3 Presigned URL
 		ownerRoutes.GET("/venues/presigned-url", venueHandler.GetPresignedURL)
 		// Venue CRUD
-		ownerRoutes.POST("/venues",venueSubmitLimiter, venueHandler.CreateVenue)
-		ownerRoutes.GET("/venues",venueHandler.GetOwnerVenues)
+		ownerRoutes.POST("/venues", venueSubmitLimiter, venueHandler.CreateVenue)
+		ownerRoutes.GET("/venues", venueHandler.GetOwnerVenues)
 		ownerRoutes.GET("/venues/:id", venueHandler.GetVenueByID)
-		ownerRoutes.PUT("/venues/:id",venueUpdateLimiter, venueHandler.UpdateVenue)
+		ownerRoutes.PUT("/venues/:id", venueUpdateLimiter, venueHandler.UpdateVenue)
 		ownerRoutes.DELETE("/venues/:id", venueHandler.DeleteVenue)
 		ownerRoutes.PATCH("/venues/:id/toggle", venueHandler.ToggleVenueStatus)
-		// Space CRUD 
+		// Space CRUD
 		ownerRoutes.POST("/venues/:id/spaces", venueHandler.AddSpace)
 		ownerRoutes.PUT("/spaces/:id", venueHandler.UpdateSpace)
 		ownerRoutes.DELETE("/spaces/:id", venueHandler.DeleteSpace)
@@ -101,11 +105,11 @@ func SetupRouter(cfg *config.Config,rdb *redis.Client, authHandler *handler.Auth
 		adminRoutes.GET("/venues/pending", adminVenueHandler.GetPendingVenues)
 		adminRoutes.POST("/venues/:id/approve", adminVenueHandler.ApproveVenue)
 		adminRoutes.POST("/venues/:id/reject", adminVenueHandler.RejectVenue)
-		
+
 		adminRoutes.GET("/venues/drafts/pending", adminVenueHandler.GetPendingDrafts)
 		adminRoutes.POST("/venues/drafts/:draft_id/approve", adminVenueHandler.ApproveEditDraft)
 		adminRoutes.POST("/venues/drafts/:draft_id/reject", adminVenueHandler.RejectEditDraft)
-		
+
 		// Protected GraphQL Endpoint
 		adminRoutes.POST("/graphql", func(c *gin.Context) {
 			gqlServer.ServeHTTP(c.Writer, c.Request)
