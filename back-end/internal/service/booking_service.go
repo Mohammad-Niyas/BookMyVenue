@@ -80,6 +80,7 @@ type BookingService interface {
 	CancelBooking(ctx context.Context, userID uuid.UUID, bookingID uuid.UUID, req CancelBookingRequest) (*CancelBookingResponse, error)
 	ListUserBookings(ctx context.Context, userID uuid.UUID, page int, limit int, status string) (*UserBookingsListResponse, error)
 	GetUserBookingByID(ctx context.Context, userID uuid.UUID, bookingID uuid.UUID) (*BookingDetailResponse, error)
+	ListOwnerVenueBookings(ctx context.Context, ownerID uuid.UUID, venueID uuid.UUID, page int, limit int, status string) (*UserBookingsListResponse, error)
 }
 
 type bookingService struct {
@@ -376,3 +377,43 @@ func (s *bookingService) GetUserBookingByID(ctx context.Context, userID uuid.UUI
 	res := mapToBookingDetailResponse(*booking)
 	return &res, nil
 }
+
+func (s *bookingService) ListOwnerVenueBookings(ctx context.Context, ownerID uuid.UUID, venueID uuid.UUID, page int, limit int, status string) (*UserBookingsListResponse, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 50 {
+		limit = 10
+	}
+	offset := (page - 1) * limit
+
+	// IDOR Guard: Verify ownership of the venue
+	venue, err := s.venueRepo.FindByID(venueID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("venue not found")
+		}
+		return nil, errors.New("failed to verify venue ownership")
+	}
+	if venue.OwnerID != ownerID {
+		return nil, errors.New("forbidden: you do not own this venue")
+	}
+
+	bookings, total, err := s.bookingRepo.FindByVenueID(ctx, venueID, status, limit, offset)
+	if err != nil {
+		return nil, errors.New("failed to fetch venue bookings")
+	}
+
+	responses := make([]BookingDetailResponse, len(bookings))
+	for i, b := range bookings {
+		responses[i] = mapToBookingDetailResponse(b)
+	}
+
+	return &UserBookingsListResponse{
+		Bookings: responses,
+		Total:    total,
+		Page:     page,
+		Limit:    limit,
+	}, nil
+}
+

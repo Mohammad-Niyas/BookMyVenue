@@ -16,6 +16,7 @@ type BookingRepository interface {
 	CancelBookingTx(ctx context.Context, bookingID uuid.UUID, reason string, cancelledBy string, slotID uuid.UUID, refund *domain.Refund) error
 	FindByUserID(ctx context.Context, userID uuid.UUID, status string, limit int, offset int) ([]domain.Booking, int64, error)
 	FindUserBookingByID(ctx context.Context, bookingID uuid.UUID, userID uuid.UUID) (*domain.Booking, error)
+	FindByVenueID(ctx context.Context, venueID uuid.UUID, status string, limit int, offset int) ([]domain.Booking, int64, error)
 }
 
 type bookingRepository struct {
@@ -148,3 +149,36 @@ func (r *bookingRepository) FindUserBookingByID(ctx context.Context, bookingID u
 	}
 	return &booking, nil
 }
+
+func (r *bookingRepository) FindByVenueID(ctx context.Context, venueID uuid.UUID, status string, limit int, offset int) ([]domain.Booking, int64, error) {
+	var bookings []domain.Booking
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&domain.Booking{}).
+		Joins("JOIN spaces ON spaces.id = bookings.space_id").
+		Where("spaces.venue_id = ?", venueID)
+
+	if status != "" {
+		query = query.Where("bookings.status = ?", status)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	err := query.Preload("User").
+		Preload("Space").
+		Preload("Space.Venue").
+		Preload("Slot").
+		Order("bookings.created_at desc").
+		Limit(limit).
+		Offset(offset).
+		Find(&bookings).Error
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return bookings, total, nil
+}
+

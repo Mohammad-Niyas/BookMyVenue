@@ -84,6 +84,8 @@ func SetupRouter(cfg *config.Config, rdb *redis.Client, authHandler *handler.Aut
 		ownerRoutes.DELETE("/spaces/:id", venueHandler.DeleteSpace)
 		// Slot Generation
 		ownerRoutes.POST("/spaces/:id/slots", venueHandler.GenerateSlots)
+		// Owner Bookings
+		ownerRoutes.GET("/venues/:id/bookings", bookingHandler.ListOwnerVenueBookings)
 	}
 
 	// GraphQL Admin Server Setup

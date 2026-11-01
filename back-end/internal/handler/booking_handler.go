@@ -200,3 +200,45 @@ func (h *BookingHandler) GetUserBookingByID(c *gin.Context) {
 		"message": "booking details fetched successfully",
 	})
 }
+
+func (h *BookingHandler) ListOwnerVenueBookings(c *gin.Context) {
+	ownerID, err := getUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	venueIDStr := c.Param("id")
+	venueID, err := uuid.Parse(venueIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid venue id"})
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	status := c.Query("status")
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	res, err := h.BookingService.ListOwnerVenueBookings(ctx, ownerID, venueID, page, limit, status)
+	if err != nil {
+		if err.Error() == "forbidden: you do not own this venue" {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		if err.Error() == "venue not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":    res,
+		"message": "owner venue bookings fetched successfully",
+	})
+}
+
